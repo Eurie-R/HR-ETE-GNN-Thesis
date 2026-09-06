@@ -1,0 +1,23 @@
+rv (1591, 11)
+{'X_train': (942, 10, 20), 'y_train': (942, 10), 'X_val': (314, 10, 20), 'y_val': (314, 10), 'X_test': (314, 10, 20), 'y_test': (314, 10)}
+last train date: 2021-11-24 first test date: 2023-02-28
+train returns for graph: (982, 10)
+  alpha=1.0: 0/90 edges survive BH-FDR q=0.1
+  alpha=0.5: 38/90 edges survive BH-FDR q=0.1
+adjacency build 61s
+    seed  0: stop@1847  val_mse=0.01634
+    seed  1: stop@1001  val_mse=0.01908
+    seed  2: stop@1391  val_mse=0.01687
+    seed  3: stop@1122  val_mse=0.01871
+    seed  4: stop@1825  val_mse=0.01729
+    seed  5: stop@1200  val_mse=0.01703
+    seed  6: stop@3000  val_mse=0.01711
+    seed  7: stop@1307  val_mse=0.01819
+    seed  0: stop@1181  val_mse=0.01839
+    seed  1: stop@1227  val_mse=0.01821
+    seed  2: stop@1315  val_mse=0.01736
+    seed  3: stop@1283  val_mse=0.01854
+    seed  4: stop@1304  val_mse=0.01802
+    seed  5: stop@936   val_mse=0.01791
+    seed  6: stop@1259  val_mse=0.01857
+    seed  7: stop@1121  val_mse=0.01839
