@@ -1,0 +1,6 @@
+Quantity,Value,Note
+"This run, measured",5.0 min,"wall clock, end to end"
+Training work ratio,180x,"seeds×epochs×arms: 540,000 vs 3,000"
+Sample-length factor,3.3x,thesis sample is longer per epoch
+ER-TE work ratio,23x,"surrogates×alphas: 7,000 vs 300"
+"Thesis run, serial estimate",49–74 hours,dominated by training; α arms parallelise perfectly

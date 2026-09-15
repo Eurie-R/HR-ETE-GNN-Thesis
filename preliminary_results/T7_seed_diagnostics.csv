@@ -1,0 +1,6 @@
+arm,edges,mean stop epoch,hit the epoch cap,seed-ensemble RMSE,per-seed RMSE sd
+HR-ETE-GNN (α=0.5),20,200.0,3,0.095026,0.00403
+"H-ETE-GNN (Shannon, α=1.0)",20,200.0,3,0.09249,0.006225
+HR-ETE-GNN (α=1.5),20,200.0,3,0.105566,0.014267
+No-graph ablation,10,200.0,3,0.09256,0.004103
+Random graph,20,200.0,3,0.090234,0.002582

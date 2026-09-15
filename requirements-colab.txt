@@ -1,0 +1,20 @@
+# Colab environment for the H-ETE-GNN replication.
+#
+#     !pip install -q -r requirements-colab.txt
+#
+# Colab already ships numpy, pandas, scipy, statsmodels, matplotlib and a CUDA
+# build of torch, so this file only states floors for those (pip sees them
+# satisfied and leaves them alone) and actually installs yfinance.
+#
+# torch is deliberately ABSENT: naming it here risks pip swapping Colab's GPU
+# wheel for a CPU one, which silently costs you the accelerator.
+
+yfinance>=0.2.40
+
+# floors only -- these are the versions the code was developed against, and
+# Colab's preinstalled ones already satisfy them
+numpy>=1.26
+pandas>=2.0
+scipy>=1.11
+statsmodels>=0.14
+matplotlib>=3.7

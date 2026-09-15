@@ -1,0 +1,13 @@
+# virtual environment (recreate from requirements.txt, never commit)
+.venv/
+
+# python bytecode
+__pycache__/
+*.py[cod]
+
+# experiment output
+replication_results.csv
+baseline_table6.csv
+baseline_runs.pkl
+.build/*.log
+.build/_harness.html

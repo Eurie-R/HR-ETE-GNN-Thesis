@@ -235,6 +235,96 @@ But nobody would call them the same. Investment B could have forced you to sell 
 **Volatility is the number that tells these two apart.** It is the measure of "how rough was the ride" — and in finance, it *is* the working definition of risk.
 """)
 
+md("""
+### Four made-up scenarios, side by side
+
+Before moving to real data, it is worth stress-testing the *idea* of volatility against a few deliberately extreme, invented paths. If realized volatility is measuring the right thing, it should react sensibly to each one — regardless of whether the path trends, whips back and forth, wanders chaotically, or does nothing at all.
+""")
+
+code("""
+rng2 = np.random.default_rng(3)
+n_toy, win_toy = 120, 20
+
+toy_scenarios = {
+    'Steadily rising':        100 * (1.003) ** np.arange(n_toy + 1),
+    'Oscillating +100 / -100': np.array([100.0 if i % 2 == 0 else -100.0
+                                          for i in range(n_toy + 1)]),
+    'Very volatile':          100 * np.exp(np.r_[0, np.cumsum(
+                                   rng2.normal(0, 0.06, n_toy))]),
+    'Flat / unchanged':       np.full(n_toy + 1, 100.0),
+}
+
+fig, axes = plt.subplots(4, 2, figsize=(13, 13))
+
+for row, (name, path) in enumerate(toy_scenarios.items()):
+    path = np.asarray(path, float)
+    pct_change = 100 * (path[1:] - path[:-1]) / path[:-1]
+    rv_toy = pd.Series(pct_change).pow(2).rolling(win_toy, min_periods=1).mean().pow(0.5)
+
+    ax1, ax2 = axes[row]
+    ax1.plot(path, color=INK, linewidth=1.3)
+    ax1.axhline(0, color='grey', linewidth=0.6)
+    ax1.set_title(f'{name} -- the path', loc='left', fontsize=10.5)
+
+    ax2.plot(rv_toy.values, color=ACCENT, linewidth=1.6)
+    ax2.set_ylim(bottom=0)
+    ax2.set_title(f'{name} -- realized volatility', loc='left', fontsize=10.5)
+
+plt.tight_layout(); plt.show()
+
+print("Where each scenario's RV settles:")
+for name, path in toy_scenarios.items():
+    path = np.asarray(path, float)
+    pct_change = 100 * (path[1:] - path[:-1]) / path[:-1]
+    rv_toy = pd.Series(pct_change).pow(2).rolling(win_toy, min_periods=1).mean().pow(0.5)
+    print(f"  {name:26s}: {rv_toy.iloc[-1]:8.2f}% per step")
+""")
+
+md("""
+### The same four scenarios, as a table of daily returns
+
+A chart shows the shape at a glance; a table lets you check specific days by eye. Here are the first 15 days of **daily returns** for all four scenarios, side by side in one table — the exact numbers that feed the "realized volatility" panels above.
+""")
+
+code("""
+returns_table = pd.DataFrame({
+    name: 100 * (np.asarray(path, float)[1:] - np.asarray(path, float)[:-1])
+          / np.asarray(path, float)[:-1]
+    for name, path in toy_scenarios.items()
+})
+returns_table.index.name = 'Day'
+returns_table.index = returns_table.index + 1   # day 1 = first return, after the day-0 starting price
+
+print("Daily return (%) for each scenario, day by day:")
+display(returns_table.head(15).round(2))
+
+print()
+print("Summary over all 120 days:")
+display(returns_table.agg(['mean', 'std', 'min', 'max']).round(2))
+""")
+
+md("""
+Scan the table left to right, one row at a time:
+
+- **Steadily rising** repeats the same small `+0.30%` every day — a boring, constant number, and its mean over the whole period is exactly `+0.30%` with zero spread (`std = 0`).
+- **Oscillating +100 / -100** shows `-200%` on *every single day*, not an alternating `+200% / -200%` as you might expect. Look at the summary row for why: going from 100 to -100 is a -200% change, but going back from -100 to 100 is *also* -200%, because dividing by a negative starting price flips the sign of the percentage. (This is the same "arithmetic returns can mislead" problem from Part 1, taken to its extreme — it's exactly why real financial data never lets prices go negative.) The mean here is a constant -200%, not zero, and the standard deviation is 0 — yet realized volatility still reports this as the riskiest scenario by far, because RV looks at the squared *size* of each day's move, and every day's move is enormous.
+- **Very volatile** has no repeating pattern at all — a different, unpredictable number every day (mean ≈ 0, std ≈ 6.5) — the closest of the four to how a real, turbulent market actually behaves.
+- **Flat / unchanged** is a column of zeros: mean 0, std 0.
+
+The table makes a sharper point than "average return tells you nothing about risk": it shows that even a **single repeated number** can produce either the lowest possible RV (`Flat`, `Steadily rising`) or the highest possible RV (`Oscillating`) — everything depends on the *size* of that number, never on whether it repeats, alternates, or varies. That is the one idea realized volatility is built to measure.
+""")
+
+md("""
+Read the four rows:
+
+1. **Steadily rising** — moves the same small percentage every step, in the same direction. RV is low and flat: a smooth, predictable climb is not "risky" in this sense, no matter how far it eventually travels.
+2. **Oscillating +100 / -100** — bounces between the two extremes on *every single step*. That is the maximum possible move, over and over, so RV is enormous and pinned at a constant ceiling immediately. Note that RV doesn't care that the swings are perfectly regular and therefore, in another sense, "predictable" — it only measures size.
+3. **Very volatile** — big, erratic jumps with no pattern and no trend. RV is high and keeps moving, mirroring how unevenly sized the moves are.
+4. **Flat / unchanged** — nothing moves. RV is exactly zero: the recipe correctly reports "no risk" when there is, by construction, none.
+
+The takeaway: **RV depends only on the size of step-to-step changes, never on direction and never on the overall trend.** A steady climb to the moon and a dead-flat line can look completely different as prices, yet the climb's RV is nearly as low as the flat line's — because each individual step is tiny either way. Meanwhile the two "same average price" scenarios that whip back and forth — the regular oscillation and the chaotic wander — are the ones that register as risky, exactly as intended.
+""")
+
 md(r"""
 ---
 
@@ -829,5 +919,7 @@ The companion notebook `HR_ETE_GNN_stats.ipynb` takes the next step: proving, wi
 nb['cells'] = C
 nb.metadata.update({'kernelspec': {'display_name':'Python 3','language':'python','name':'python3'},
                     'language_info': {'name':'python','version':'3.12'}})
-nbf.write(nb, '/home/uriel/repositories/HR-ETE-GNN-THESIS_FINAL/explanation.ipynb')
+import os
+out_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'explanation.ipynb')
+nbf.write(nb, out_path)
 print(f"wrote explanation.ipynb with {len(C)} cells")

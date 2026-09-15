@@ -1,0 +1,14 @@
+Quantity,Value,How to read it
+Instrument,"lagged Hurst H<0.5 (URTH, 250-day R/S)",
+Days flagged turbulent,4 of 314,**drives all the power below**
+β̂₀  (calm-regime mean differential),-0.000673,advantage when markets are persistent
+HAC SE(β̂₀),0.000363,
+β̂₁  (extra advantage in turbulence),-0.002039,the number the thesis rests on
+HAC SE(β̂₁),0.001010,
+t-statistic for β̂₁,-2.019,one-sided
+One-sided p for β̂₁,0.9782,H₁: β₁ > 0
+Turbulent-regime mean differential (β̂₀+β̂₁),-0.002712,
+Observed calm mean d,-0.000673,
+Observed turbulent mean d,-0.002712,
+Joint GW Wald,χ²(2) = 4.361,tests β₀ = β₁ = 0
+Joint p-value,0.1130,"omnibus, two-sided"

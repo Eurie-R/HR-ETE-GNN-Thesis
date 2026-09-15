@@ -1,0 +1,8 @@
+Quantity,Value,How to read it
+Test days (T),314,sample size for every RQ1 test
+"Turbulent days, whole sample","130 / 1,361 (9.6%)",Hurst H < 0.5 on the World proxy
+Turbulent days IN TEST BLOCK,4 / 314 (1.3%),<<< this is what H1b is estimated from
+High-vol days IN TEST BLOCK (relative),11 / 314 (3.5%),"above trailing 250-day 80th pct -- adaptive, stays populated"
+High-vol days IN TEST BLOCK (absolute),0 / 314 (0.0%),above a threshold fixed on the training block (which contains COVID)
+Min detectable mean(d)/sd(d) at 5%,0.0928,"below this, nothing is significant however true"
+Min detectable mean(d)/sd(d) at 80% power,0.1403,"below this, a null result is uninformative"

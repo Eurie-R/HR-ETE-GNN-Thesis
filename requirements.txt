@@ -1,0 +1,38 @@
+# Local environment for the H-ETE-GNN replication (hetegnn_base.py).
+#
+#     py -m venv .venv
+#     .venv\Scripts\python -m pip install -r requirements.txt
+#     .venv\Scripts\python .build\selftest.py
+#
+# Exact pins, because thesis numbers should be reproducible from a clean
+# machine.  Verified on Windows 11 / Python 3.12.10 (2026-09-07).
+#
+# DO NOT install this file on Colab -- the torch pin below is a CPU wheel and
+# would replace Colab's CUDA build.  Use requirements-colab.txt there.
+
+# --- core numerics -----------------------------------------------------------
+numpy==2.5.2
+pandas==3.0.5
+scipy==1.18.1
+
+# statsmodels is not imported by hetegnn_base (the Granger F-test is computed
+# directly, ~1500x faster); it is used by the notebook's Table 5 cell and by
+# .build/selftest.py, which cross-checks our F-test against ssr_ftest.
+statsmodels==0.15.0
+
+# --- data + plotting ---------------------------------------------------------
+yfinance==1.7.0
+matplotlib==3.11.1
+
+# --- model -------------------------------------------------------------------
+# CPU build.  For the local RTX 2070, swap in the CUDA wheel instead:
+#     .venv\Scripts\python -m pip install --index-url \
+#         https://download.pytorch.org/whl/cu126 torch
+# The model is small and batched at 8, so CPU is competitive; see .build/timing.log.
+torch==2.14.0
+
+# --- notebook runtime --------------------------------------------------------
+ipykernel==7.3.0
+jupyterlab==4.6.3
+notebook==7.6.2
+ipywidgets==8.1.9

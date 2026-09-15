@@ -1,0 +1,8 @@
+,mean QLIKE,MCS p-value,eliminated at step,in 90% set?
+Random walk,0.006006,1.0,,True
+HAR-RV (Corsi 2009),0.00619,0.0375,6.0,False
+HR-ETE-GNN (α=0.5),0.014296,0.0,1.0,False
+HR-ETE-GNN (α=1.5),0.017914,0.0,4.0,False
+"H-ETE-GNN (Shannon, α=1.0)",0.013597,0.0,5.0,False
+Random graph,0.012602,0.0,3.0,False
+No-graph ablation,0.013513,0.0,2.0,False

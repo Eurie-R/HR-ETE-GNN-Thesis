@@ -1,0 +1,8 @@
+Quantity,Value,How to read it
+Edges per graph (K),20,matched by construction
+Observed top-K overlap,12,edges both α agree on
+Expected overlap if independent,4.44,20·20/90
+Hypergeometric p (overlap ≥ observed),0.0000,small p ⇒ the two α agree MORE than chance
+"Kendall τ, out-degree rankings",0.453,1 = identical ranking
+τ asymptotic p,0.1007,two-sided
+τ 400-draw stationary-bootstrap 95% CI,"[0.270, 0.919]",CI containing 0 ⇒ rankings not detectably concordant

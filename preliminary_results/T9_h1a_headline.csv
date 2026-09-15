@@ -1,0 +1,14 @@
+Quantity,Symbol,Value,How to read it
+Test days,T,314,sample size for every test in this notebook
+Mean loss differential,d̄,-0.000699,positive ⇒ Rényi wins on average
+Baseline mean loss,L̄(base),0.013597,denominator below
+Relative improvement,d̄ / L̄(base),-5.14%,the economically meaningful number
+HAC standard error,SE(d̄),0.000363,"Newey–West, Bartlett bandwidth 5"
+GW statistic (t-form),t,-1.928,d̄ divided by its HAC standard error
+GW one-sided p-value,p,0.9731,P(this or larger | models equal)
+95% one-sided lower bound,—,-0.001295,report this — a p-value alone is not an effect size
+Decision at 5%,—,fail to reject H₀,
+Meets pre-registered min effect,—,no,threshold = 5% loss reduction
+DM (HLN-corrected),DM*,-3.122,robustness check; nested-model caveat applies
+DM one-sided p,p,0.9990,h = 1 ⇒ zero HAC lags by convention
+GW unconditional Wald,χ²(1),3.716,"two-sided omnibus form, p = 0.0539"

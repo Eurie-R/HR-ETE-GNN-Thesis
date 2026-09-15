@@ -1,0 +1,27 @@
+Using QLIKE as the pre-registered loss function on a 314-day out-of-sample
+period (2023-02-28 to 2024-05-28), the HR-ETE-GNN with
+alpha = 0.5 achieved a mean loss of 0.01430 against
+0.01360 for the Shannon H-ETE-GNN baseline,
+a DETERIORATION of 5.14%. A one-sided
+Giacomini-White test of conditional predictive ability with a Newey-West HAC
+covariance estimator (Bartlett bandwidth 5) gives t = -1.928 (p = 0.9731).
+Across the ten individual ETFs, 0 of 10 remained significant after
+Benjamini-Hochberg FDR control at q = 0.1, the mean differential was
+positive for 3 of 10, and 3 showed significant deterioration. The
+90% Model Confidence Set contained 1 of
+7 candidates (Random walk). Both arms were trained with
+identical seed lists over 3 seeds and evaluated as seed ensembles; the
+adjacency matrices were estimated on training data only, ending
+2021-11-24, 461 calendar days
+before the test block opens.
+
+REGIME CONDITIONING: the test block contains 4 day(s) flagged turbulent by
+the lagged Hurst indicator, 0 by an absolute high-volatility threshold fixed
+on the training block, and 11 by a relative (trailing-quantile) one. The Hurst-based
+regime test (H1b) is therefore NOT EVALUABLE in this run and no
+regime-conditional claim is made.
+
+SCOPE: MODE = preliminary. 3 seeds, 200 epochs, 100 surrogates
+per pair, alpha grid [0.5, 1.0, 1.5], sample from 2018-01-01. The thesis run uses
+20 seeds, 3000 epochs, 1000 surrogates,
+alpha grid [0.3, 0.5, 0.7, 0.9, 1.0, 1.1, 1.5], sample from 2003-02-07.

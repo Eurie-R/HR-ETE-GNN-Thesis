@@ -1,0 +1,4 @@
+alpha,regime,edges after BH-FDR,density %,pairs at the p-floor,raw p < 0.05,smallest p,mean |ER-TE|
+0.5,"Rényi, tail-emphasising",36,40.0,21,39,0.0099,0.03771
+1.0,SHANNON — the H-ETE-GNN baseline,0,0.0,1,13,0.0099,0.02665
+1.5,"Rényi, bulk-emphasising",10,11.11111,10,22,0.0099,0.04811

@@ -1,0 +1,14 @@
+Quantity,Value,How to read it
+Instrument,lagged cross-sectional RV > trailing 250-day 80th pct,
+Days flagged turbulent,11 of 314,**drives all the power below**
+β̂₀  (calm-regime mean differential),-0.000677,advantage when markets are persistent
+HAC SE(β̂₀),0.000373,
+β̂₁  (extra advantage in turbulence),-0.000620,the number the thesis rests on
+HAC SE(β̂₁),0.000902,
+t-statistic for β̂₁,-0.687,one-sided
+One-sided p for β̂₁,0.7541,H₁: β₁ > 0
+Turbulent-regime mean differential (β̂₀+β̂₁),-0.001297,
+Observed calm mean d,-0.000677,
+Observed turbulent mean d,-0.001297,
+Joint GW Wald,χ²(2) = 4.580,tests β₀ = β₁ = 0
+Joint p-value,0.1012,"omnibus, two-sided"
