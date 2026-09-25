@@ -31,12 +31,15 @@ def benjamini_hochberg_mask(p, q=FDR_Q):
 
 
 def build_erte_graph(returns_df, tickers, alpha, m_surrogates=M_SURROGATES,
-                     k=KNN_K, fdr_q=FDR_Q, verbose=True):
+                     k=KNN_K, fdr_q=FDR_Q, surrogate=SURROGATE, verbose=True):
     """Directed ER-TE graph. A_fdr[i,j] > 0 means information flows i -> j.
 
     Returns both the FDR-filtered adjacency (the honest 'what is significant?'
     answer) and the raw ER-TE magnitude matrix (needed to build matched-density
     graphs in section 5).
+
+    `surrogate` decides what "significant" means here, so it is recorded on the
+    returned dict and belongs in the caption of any graph built from it.
     """
     n = len(tickers)
     E, Z, P = np.zeros((n,n)), np.zeros((n,n)), np.ones((n,n))
@@ -44,16 +47,17 @@ def build_erte_graph(returns_df, tickers, alpha, m_surrogates=M_SURROGATES,
     for i, j in pairs:
         E[i,j], Z[i,j], P[i,j] = effective_rte(
             returns_df[tickers[i]].values, returns_df[tickers[j]].values,
-            alpha=alpha, k=k, m_surrogates=m_surrogates, seed=1000*i + j)
+            alpha=alpha, k=k, m_surrogates=m_surrogates, seed=1000*i + j,
+            surrogate=surrogate)
     pv = np.array([P[i,j] for i,j in pairs])
     keep = benjamini_hochberg_mask(pv, q=fdr_q)
     A = np.zeros((n,n))
     for (i,j), kp in zip(pairs, keep):
         if kp and np.isfinite(E[i,j]): A[i,j] = max(E[i,j], 0.0)
     if verbose:
-        print(f"  alpha={alpha}: {int((A>0).sum()):3d}/{n*(n-1)} edges survive "
-              f"BH-FDR q={fdr_q}   (raw p<.05: {int((pv<.05).sum())})")
-    return dict(A_fdr=A, E_raw=E, Z=Z, P=P, pvals=pv)
+        print(f"  alpha={alpha} [{surrogate}]: {int((A>0).sum()):3d}/{n*(n-1)} "
+              f"edges survive BH-FDR q={fdr_q}   (raw p<.05: {int((pv<.05).sum())})")
+    return dict(A_fdr=A, E_raw=E, Z=Z, P=P, pvals=pv, surrogate=surrogate)
 
 
 t0 = time.time()

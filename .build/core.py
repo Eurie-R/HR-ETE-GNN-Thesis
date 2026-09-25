@@ -6,6 +6,11 @@ from scipy import stats
 
 _EPS = 1e-12
 
+#: The two surrogate nulls effective_rte() knows about. See its docstring:
+#: "circular" preserves Y's autocorrelation, "shuffle" does not, and they
+#: answer different questions. "circular" is the primary null for the thesis.
+SURROGATE_NULLS = ("circular", "shuffle")
+
 # ---------------- entropy ----------------
 def rank_uniform(x):
     """Copula transform: map a series to uniform margins via its ranks.
@@ -89,12 +94,24 @@ def effective_rte(y, x, alpha, k=4, m_surrogates=200, seed=0, copula=True,
     ER-TE = RTE(Y->X) - mean(RTE(Y_surrogate->X)), which removes the finite-sample
     bias of the k-NN estimator.
 
-    surrogate="circular" (default) rotates Y by a random offset. This destroys
-    the Y->X cross-dependence while PRESERVING Y's own autocorrelation. The pilot
-    used a full random permutation, which destroys both -- so its null hypothesis
-    was "Y is i.i.d. noise" rather than the intended "Y carries no information
-    about X beyond X's own past". Financial returns are serially dependent, so
-    the two nulls are not interchangeable.
+    Two surrogate nulls, and they test DIFFERENT hypotheses:
+
+      "circular" (default) rotates Y by a random offset. This destroys the
+      Y->X cross-dependence while PRESERVING Y's own autocorrelation, so the
+      null is "Y carries no information about X beyond X's own past".
+
+      "shuffle" draws a full random permutation of Y, which destroys the
+      cross-dependence AND Y's serial dependence, so the null is the stronger
+      "Y is i.i.d. noise". Financial returns are serially dependent, so a
+      shuffled Y is easier to beat: the surrogate TE is biased low, the
+      subtracted bias term is too small, and ER-TE and its significance are
+      both inflated relative to the circular null.
+
+    The two are therefore NOT interchangeable and "circular" is the primary
+    null for every reported result. "shuffle" is kept for two reasons: it is
+    what the pilot ran, and it is what Lee & Cho's Eq (4) ETE uses, so it is
+    the only way to compare against either on a matched null. Use it as a
+    robustness arm, and label which null produced any edge count you quote.
 
     Returns (erte, z, p_permutation). Prefer the permutation p-value: with a
     finite surrogate count the z-score's null is not normal, so comparing z to
@@ -106,6 +123,10 @@ def effective_rte(y, x, alpha, k=4, m_surrogates=200, seed=0, copula=True,
     answer as circularly shifting the ranks, because ranks are equivariant under
     permutation.
     """
+    if surrogate not in SURROGATE_NULLS:
+        raise ValueError(f"surrogate must be one of {SURROGATE_NULLS}, "
+                         f"got {surrogate!r}. The two nulls are not "
+                         f"interchangeable -- see the docstring.")
     rng = np.random.default_rng(seed)
     Xtp1, Xt, Yt = _te_blocks(y, x, lag)
     if copula:
@@ -118,10 +139,8 @@ def effective_rte(y, x, alpha, k=4, m_surrogates=200, seed=0, copula=True,
     n = len(Yt)
     surr = np.empty(m_surrogates)
     for i in range(m_surrogates):
-        if surrogate == "circular":
-            Ys = np.roll(Yt, int(rng.integers(1, n)))
-        else:
-            Ys = rng.permutation(Yt)
+        Ys = (np.roll(Yt, int(rng.integers(1, n))) if surrogate == "circular"
+              else rng.permutation(Yt))
         surr[i] = _te_from_blocks(Xtp1, Xt, Ys, alpha, k, cache=cache)
 
     bias = np.nanmean(surr)
@@ -147,7 +166,14 @@ def benjamini_hochberg_mask(p, q=0.10):
     return mask & ok
 
 def build_erte_adjacency(returns_df, tickers, alpha, m_surrogates=200, k=4,
-                         fdr_q=0.10, copula=True, verbose=False):
+                         fdr_q=0.10, copula=True, surrogate="circular",
+                         verbose=False):
+    """Directed ER-TE adjacency over `tickers`, BH-FDR filtered at `fdr_q`.
+
+    `surrogate` selects the null; it is passed straight to effective_rte() and
+    changes what "significant" means, so it belongs in the caption of any graph
+    built here. See effective_rte's docstring.
+    """
     n = len(tickers)
     E = np.zeros((n, n)); Z = np.zeros((n, n)); P = np.ones((n, n))
     pairs = []
@@ -156,7 +182,8 @@ def build_erte_adjacency(returns_df, tickers, alpha, m_surrogates=200, k=4,
             if i == j: continue
             e, z, p = effective_rte(returns_df[ti].values, returns_df[tj].values,
                                     alpha=alpha, k=k, m_surrogates=m_surrogates,
-                                    seed=1000 * i + j, copula=copula)
+                                    seed=1000 * i + j, copula=copula,
+                                    surrogate=surrogate)
             E[i, j], Z[i, j], P[i, j] = e, z, p
             pairs.append((i, j))
     pv = np.array([P[i, j] for i, j in pairs])
@@ -166,7 +193,8 @@ def build_erte_adjacency(returns_df, tickers, alpha, m_surrogates=200, k=4,
         if kp and np.isfinite(E[i, j]):
             A[i, j] = max(E[i, j], 0.0)
     if verbose:
-        print(f"  alpha={alpha}: {int((A>0).sum())}/{n*(n-1)} edges survive BH-FDR q={fdr_q}")
+        print(f"  alpha={alpha} [{surrogate}]: {int((A>0).sum())}/{n*(n-1)} "
+              f"edges survive BH-FDR q={fdr_q}")
     return A, Z, P
 
 

@@ -1,0 +1,3 @@
+alpha,edges [circular],edges [shuffle],edges in both,Jaccard,raw p<.05 [circular],raw p<.05 [shuffle],mean ER-TE [circular],mean ER-TE [shuffle],ER-TE inflation,mean p shift,pairs flipping at BH,top-20 overlap
+0.5,36,36,34,0.89474,39,37,0.03506,0.03545,1.01116,0.00187,4,20
+1.0,0,0,0,,13,10,0.01383,0.01426,1.03101,0.00352,0,18

@@ -226,8 +226,52 @@ problems:
 - **The surrogate budget caps the edge count.** With *m* surrogates no
   permutation *p* can fall below 1/(*m*+1), and BH across 90 ordered pairs needs
   many pairs sitting at that floor before any edge survives. At *m* = 100 that
-  threshold is 10 pairs; at *m* = 1000 it is 1. A low edge count at preliminary
+  threshold is 9 pairs; at *m* = 1000 it is 1. A low edge count at preliminary
   scope is a statement about the surrogate budget, not about the market.
 
 Tables and figures are written to `preliminary_results/` as CSV and PNG, one file
 per numbered table, ready to paste into the manuscript.
+
+## Two surrogate nulls, and why the thesis arm does not use the paper's
+
+Lee & Cho's Eq (4) defines ETE as TE minus the mean of *m* **shuffled**
+surrogates, and `hetegnn_base.effective_te` replicates that literally. The
+thesis arm (`.build/core.py`, `effective_rte`) defaults to a **circular-shift**
+surrogate instead, and the two answer different questions:
+
+| null | what it destroys | hypothesis being tested |
+|---|---|---|
+| `"circular"` | the *Y*→*X* dependence only; *Y*'s own autocorrelation survives | "*Y* says nothing about *X* beyond *X*'s own past" |
+| `"shuffle"` | the dependence *and* *Y*'s serial structure | "*Y* is i.i.d. noise" |
+
+A shuffled *Y* is a worse predictor of itself than the real *Y* is, so the
+surrogate TE comes out too low, too little bias is subtracted, and both ER-TE
+and its significance are inflated. On serially dependent data the two nulls are
+therefore not interchangeable — which is why `"circular"` is the primary
+specification for every reported ER-TE number.
+
+`"shuffle"` is kept as a first-class option rather than deleted, because it is
+what the pilot ran and what the baseline runs, and a Rényi-vs-Shannon edge
+comparison against `hetegnn_base` otherwise changes two things at once:
+
+```python
+hr.effective_rte(y, x, alpha=0.5, surrogate="shuffle")
+hr.build_erte_adjacency(returns, tickers, alpha=0.5, surrogate="shuffle")
+```
+
+Anything other than `"circular"` or `"shuffle"` raises, so a typo cannot
+silently switch the null.
+
+`preliminary_results.ipynb` §4b prices the choice: it re-estimates the same 90
+pairs under both nulls at α = 0.5 and α = 1.0 and writes
+`T4b_surrogate_null_robustness.csv` — edge counts, Jaccard overlap, top-*K*
+overlap, mean ER-TE and the *p*-shift, side by side. The extra cost is one
+ER-TE sweep per α in `ALT_NULL_ALPHAS` (~24 s each at *m* = 100).
+
+Measured at preliminary scope, the two nulls came out close: ER-TE ~1–3% higher
+under shuffle, top-20 edge overlap 20/20 at α = 0.5 and 18/20 at α = 1.0. That
+is the expected result and not an anti-climax — the graph is built from daily
+*returns*, which are close to serially uncorrelated, so circular shift has
+little to protect. The argument bites only on a persistent series, which is what
+you get the moment the graph is rebuilt on realized volatility. Report the table
+rather than the assumption.

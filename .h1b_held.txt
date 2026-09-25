@@ -1,0 +1,28 @@
+#### 3.9.2 Hypothesis 1b — Regime-conditional accuracy
+
+The regression of interest, estimated with HAC standard errors, is
+
+  d_t = β₀ + β₁ · Turbulent_{t−1} + ε_t
+
+where Turbulent_{t−1} = 1 if the regime label of Section 3.6 is anti-persistent on day t − 1, and 0 otherwise. The indicator is lagged by one day so that it is measurable with respect to the information set available when the forecast is made.
+
+**H₀:** β₁ = 0. Whatever accuracy difference exists between the two models is the same in anti-persistent and persistent regimes; the lagged regime signal carries no information about which model will win.
+
+**H₁:** β₁ > 0. The accuracy advantage of HR-ETE-GNN is larger on days following an anti-persistent regime signal.
+
+**Test.** Giacomini–White [26] with the lagged regime indicator as the conditioning instrument, one-sided on β₁, HAC standard errors. The joint Wald statistic for β₀ = β₁ = 0, distributed χ² with 2 degrees of freedom, is reported alongside as an omnibus test; note that the joint form is two-sided and detects difference rather than superiority, so the directional claim rests on the coefficient t-statistic and not on the χ² statistic. As specified in Section 3.2, the regression is estimated a second time with a lagged calendar crisis dummy in place of the Hurst indicator.
+
+**Reported quantities.** β̂₀ (the calm-regime mean differential), β̂₁ (the incremental turbulent-regime differential), β̂₀ + β̂₁ (the turbulent-regime mean differential), HAC standard errors and one-sided p-values for each, the joint χ² statistic, and the number of turbulent days in the test block.
+
+**Interpretation, stated in advance.** Four outcomes are distinguished, and each is reported as such rather than reinterpreted after the fact.
+
+(i) β̂₁ > 0 and significant: the tail-sensitivity mechanism proposed in Section 1.5 is supported, and the gain concentrates where the theory of Section 2.1.5 predicts it should.
+
+(ii) β̂₀ > 0 significant but β̂₁ indistinguishable from zero: the model forecasts better, but uniformly. The improvement is reported, and the manuscript states that the mechanism advanced to explain it is not corroborated by its own test.
+
+(iii) β̂₀ indistinguishable from zero and β̂₁ > 0: the outcome most consistent with the research objective of Section 1.2, namely improved robustness under extreme regimes at no cost to calm-period performance.
+
+(iv) Neither coefficient significant: no evidence of improvement.
+
+Because the power of this test is governed by the number of turbulent days in the test block, a null result accompanied by a small turbulent-day count is reported as uninformative rather than as evidence of no effect, together with the minimum effect detectable at that sample size.
+

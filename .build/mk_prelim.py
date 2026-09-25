@@ -20,7 +20,7 @@ md(r"""
 
 ---
 
-**What this notebook is.** Every stage of the final experiment, in order, start to finish: data → Hurst regimes → Rényi ER-TE graph estimation → matched-density graphs → multi-seed GNN training → forecasts → the four RQ1 hypothesis tests → the two RQ2 hypothesis tests → the reporting template. Nothing is skipped, stubbed, or filled in with invented numbers. Every table below is computed from real data by the same code the final run will use.
+**What this notebook is.** Every stage of the final experiment, in order, start to finish: data → Hurst regimes → Rényi ER-TE graph estimation → surrogate-null robustness → matched-density graphs → multi-seed GNN training → forecasts → the four RQ1 hypothesis tests → the two RQ2 hypothesis tests → the reporting template. Nothing is skipped, stubbed, or filled in with invented numbers. Every table below is computed from real data by the same code the final run will use.
 
 **What this notebook is not.** It is not the result. Five knobs — sample length, α grid, surrogate count, training seeds, training epochs — are turned down far enough that the whole experiment finishes in minutes rather than days. That buys speed at the direct cost of *statistical power* and *estimator precision*. The **shape** of every table below is final. The **numbers** in them are not, and no claim in the thesis may cite them.
 
@@ -115,6 +115,8 @@ PRIMARY_TEST        = "Giacomini-White (2006), HAC"
 PRIMARY_ALTERNATIVE = "greater"                      # one-sided: Renyi beats Shannon
 PRIMARY_LEVEL       = 0.05
 PRIMARY_ALPHA_ARM   = 0.5                            # the ONE pre-specified alpha for H1a
+SURROGATE           = "circular"                     # the PRIMARY surrogate null
+SURROGATE_ALT       = "shuffle"                      # robustness arm -- see 4b
 SECONDARY_FDR_Q     = 0.10                           # BH across the 10 ETFs / 90 pairs
 MCS_CONFIDENCE      = 0.90
 MIN_MEANINGFUL_GAIN = 0.05                           # 5% QLIKE reduction = smallest claim worth making
@@ -152,6 +154,12 @@ SEEDS        = list(range(CFG["seeds"]))
 EPOCHS, PATIENCE, LR = CFG["epochs"], CFG["patience"], CFG["lr"]
 MCS_B, BOOT_B = CFG["mcs_B"], CFG["boot_B"]
 
+# The shuffled-null robustness arm costs one extra ER-TE sweep per alpha, so it
+# runs on the two alphas that carry claims -- the pre-registered H1a arm and the
+# Shannon baseline -- not on the whole grid. Same at both scopes: it is a
+# robustness check on specific numbers, not a knob that was turned down.
+ALT_NULL_ALPHAS = [a for a in (PRIMARY_ALPHA_ARM, 1.0) if a in ALPHA_GRID]
+
 torch.set_num_threads(4)   # measured optimum on a 12-core box; the network is tiny
 
 contract = pd.DataFrame([
@@ -176,7 +184,10 @@ print(f"MODE = {MODE.upper()}\\n")
 print(f"Pre-registered primary : {PRIMARY_METRIC} / {PRIMARY_TEST},"
       f" one-sided '{PRIMARY_ALTERNATIVE}' at {PRIMARY_LEVEL}")
 print(f"Pre-registered H1a arm : alpha = {PRIMARY_ALPHA_ARM}"
-      f"  (fixed in advance, NOT chosen as the best performer)\\n")
+      f"  (fixed in advance, NOT chosen as the best performer)")
+print(f"Pre-registered null    : {SURROGATE} surrogate;"
+      f" '{SURROGATE_ALT}' reported as a robustness arm at alpha"
+      f" {ALT_NULL_ALPHAS} (\u00a74b)\\n")
 display(contract.style.hide(axis="index"))
 ''')
 
@@ -415,15 +426,20 @@ md(r"""
 
 For each of the 90 ordered pairs (*i* → *j*), the effective Rényi transfer entropy is measured against a **circular-shift** surrogate null. Circular shift, not full permutation: rotating *Y* destroys the *Y* → *X* cross-dependence while leaving *Y*'s own autocorrelation intact, so the null being tested is "*Y* carries no information about *X* beyond *X*'s own past" rather than "*Y* is i.i.d. noise". Financial returns are serially dependent, so those two nulls are not interchangeable and the pilot's version tested the wrong one.
 
+That is an argument, and §4b below turns it into a number: the same pairs are re-estimated against the shuffled null and the two edge sets are put side by side. Every figure in this section is the **circular** null unless the caption says otherwise.
+
 Each pair yields an exact permutation *p*-value; all 90 then go through Benjamini–Hochberg at *q* = 0.10.
 
 **The constraint.** With *m* surrogates the smallest achievable permutation *p* is 1/(*m*+1). BH at rank *k* compares the *k*-th smallest *p* against *q·k*/90. So no edge can survive unless at least ⌈90/(q(m+1))⌉ pairs sit at the floor simultaneously. The cell computes that number. It is a property of the design, and at preliminary scope it is large — which means **a low edge count at this scope is a statement about the surrogate budget, not about the market**.
 """)
 
 code('''
-def erte_graph(rdf, alpha, m=None, tag=""):
+def erte_graph(rdf, alpha, m=None, tag="", surrogate=SURROGATE):
     """All 90 ordered pairs at one alpha: raw ER-TE, z, exact permutation p,
-    and the BH-FDR-masked adjacency.  Estimated on whatever window `rdf` is."""
+    and the BH-FDR-masked adjacency.  Estimated on whatever window `rdf` is.
+
+    `surrogate` picks the null and therefore what "significant" means here;
+    it is carried on the returned dict so no downstream table can lose it."""
     m = M_SURROGATES if m is None else m
     n = len(TICKERS)
     E = np.zeros((n, n)); Z = np.zeros((n, n)); P = np.ones((n, n))
@@ -433,15 +449,15 @@ def erte_graph(rdf, alpha, m=None, tag=""):
             if i == j: continue
             e, z, p = hr.effective_rte(rdf[ti].values, rdf[tj].values, alpha=alpha,
                                        k=KNN_K, m_surrogates=m, seed=1000*i + j,
-                                       copula=True, surrogate="circular")
+                                       copula=True, surrogate=surrogate)
             E[i, j], Z[i, j], P[i, j] = e, z, p
     off = ~np.eye(n, dtype=bool)
     keep = hr.benjamini_hochberg_mask(P[off], q=SECONDARY_FDR_Q)
     A = np.zeros((n, n))
     A[off] = np.where(keep & np.isfinite(E[off]), np.maximum(E[off], 0.0), 0.0)
-    stamp(f"  ER-TE {tag}alpha={alpha}: {int((A > 0).sum())}/90 edges survive BH "
-          f"({time.time()-t0:.0f}s)")
-    return dict(E=E, Z=Z, P=P, A_fdr=A, pvals=P[off])
+    stamp(f"  ER-TE {tag}alpha={alpha} [{surrogate}]: {int((A > 0).sum())}/90 "
+          f"edges survive BH ({time.time()-t0:.0f}s)")
+    return dict(E=E, Z=Z, P=P, A_fdr=A, pvals=P[off], surrogate=surrogate)
 
 # --- the floor this scope imposes, computed BEFORE the table is read -------
 p_floor  = 1.0 / (M_SURROGATES + 1)
@@ -495,6 +511,95 @@ fig.colorbar(im, ax=axes, shrink=.75, label="ER-TE (nats)")
 plt.suptitle("ER-TE adjacency after FDR control — training window only",
              fontweight="bold")
 plt.savefig(OUT / "F2_adjacency_heatmaps.png", dpi=130, bbox_inches="tight"); plt.show()
+''')
+
+# ===========================================================================
+md(r"""
+---
+
+## §4b — Robustness: the same pairs against a shuffled null
+
+🟨 **NUMBERS PROVISIONAL.**
+
+§4 argued that the choice of surrogate matters. This section measures it, because "we used a better null" is a claim a panel is entitled to see priced.
+
+The shuffled null draws a full random permutation of *Y*, destroying its serial dependence as well as its relationship with *X*. Its null hypothesis is therefore the stronger "*Y* is i.i.d. noise", and it is **easier to reject**: a shuffled *Y* is a worse predictor of itself than the real *Y* is, so the surrogate transfer entropy comes out too low, too little bias is subtracted, and both ER-TE and its significance are pushed up. The size of that push is what the table below reports.
+
+Two reasons this is worth the extra sweep rather than a footnote:
+
+1. **The pilot ran the shuffled null.** Any edge count carried over from the pilot is on the inflated scale, and this table is the conversion factor.
+2. **So does the baseline.** Lee & Cho's Eq (4) defines ETE as TE minus the mean of *m* **shuffled** surrogates. A Rényi-vs-Shannon edge comparison against the replication therefore has two things changing at once — the entropy order *and* the null — unless the null is matched. Inside this notebook every α arm shares one null, so §5 onward is clean; the confound only appears when these graphs are set beside `hetegnn_base`.
+
+It runs on α ∈ `ALT_NULL_ALPHAS` — the pre-registered H1a arm and the Shannon baseline — not the whole grid, because it prices a specific claim rather than exploring.
+
+**Both outcomes are reportable, and they are not equally likely a priori.** If the shuffled null returns materially more edges or larger ER-TE, that gap *is* the autocorrelation of the returns being scored as information flow, and it justifies the primary specification directly.
+
+If the two barely differ, the honest reading is that the argument is sound but close to inert **on this data**, and that has a mechanical explanation worth stating rather than hiding: the estimator runs on rank-transformed daily *returns*, and daily returns are close to serially uncorrelated. It is realized *volatility* that is persistent, not the series the graph is built from. So the thing circular shift protects against is largely absent here, and the two nulls have little room to disagree.
+
+Either way the primary specification does not change. Circular shift is the conservative choice, it costs nothing extra to compute, and it is the one that stays correct if the estimator is ever moved onto a persistent series — which is exactly what happens if the graph is rebuilt on RV rather than returns. A robustness table reading "this did not matter here" is a defence; an untested assumption is not.
+""")
+
+code('''
+GRAPH_ALT = {a: erte_graph(train_ret, a, tag="alt-null ", surrogate=SURROGATE_ALT)
+             for a in ALT_NULL_ALPHAS}
+''')
+
+code('''
+OFF = ~np.eye(10, dtype=bool)
+
+def _top_k_set(E, k=MATCHED_K):
+    """Indices of the k largest off-diagonal ER-TE magnitudes."""
+    flat = np.where(OFF, E, -np.inf).ravel()
+    return set(np.argsort(flat)[-k:].tolist())
+
+rows = []
+for a in ALT_NULL_ALPHAS:
+    g0, g1 = GRAPH[a], GRAPH_ALT[a]
+    e0, e1 = g0["A_fdr"][OFF] > 0, g1["A_fdr"][OFF] > 0
+    inter, union = int((e0 & e1).sum()), int((e0 | e1).sum())
+    t0, t1 = _top_k_set(g0["E"]), _top_k_set(g1["E"])
+    rows.append({
+        "alpha": a,
+        f"edges [{SURROGATE}]": int(e0.sum()),
+        f"edges [{SURROGATE_ALT}]": int(e1.sum()),
+        "edges in both": inter,
+        "Jaccard": inter / union if union else np.nan,
+        f"raw p<.05 [{SURROGATE}]": int((g0["pvals"] < .05).sum()),
+        f"raw p<.05 [{SURROGATE_ALT}]": int((g1["pvals"] < .05).sum()),
+        f"mean ER-TE [{SURROGATE}]": np.nanmean(g0["E"][OFF]),
+        f"mean ER-TE [{SURROGATE_ALT}]": np.nanmean(g1["E"][OFF]),
+        "ER-TE inflation": (np.nanmean(g1["E"][OFF]) / np.nanmean(g0["E"][OFF])
+                            if np.nanmean(g0["E"][OFF]) else np.nan),
+        "mean p shift": float(np.mean(g1["pvals"] - g0["pvals"])),
+        "pairs flipping at BH": union - inter,
+        f"top-{MATCHED_K} overlap": len(t0 & t1),
+    })
+
+null_cmp = pd.DataFrame(rows).set_index("alpha")
+print(f"[T4b] SURROGATE-NULL ROBUSTNESS — '{SURROGATE}' (primary) vs "
+      f"'{SURROGATE_ALT}', training window only")
+display(null_cmp.round(4))
+null_cmp.round(5).to_csv(OUT / "T4b_surrogate_null_robustness.csv")
+
+print("\\nHow to read it:")
+print(f"  'ER-TE inflation' > 1 and a negative 'mean p shift' are the PREDICTED")
+print(f"  direction: the {SURROGATE_ALT} null has to explain away the returns' own")
+print("  persistence as well as the cross-dependence, so it subtracts too little")
+print("  bias. This table is what decides whether that prediction has any size.")
+print(f"  'top-{MATCHED_K} overlap' out of {MATCHED_K} is the column \u00a75 actually "
+      f"consumes: it asks")
+print("  whether the null changes WHICH edges are largest, not just how many clear")
+print("  the bar.")
+
+print(f"\\n  Noise floor: at m = {M_SURROGATES} the permutation p lives on a grid "
+      f"of {1/(M_SURROGATES+1):.4f}, so a handful of")
+print("  pairs crossing the 0.05 line is surrogate noise, not a finding. Read the")
+print("  ER-TE and overlap columns -- which are continuous -- before the")
+print(f"  significance counts. The thesis run at m = {FULL['m_surrogates']} settles those.")
+
+print(f"\\n  Every downstream section uses the '{SURROGATE}' graphs. This table is "
+      f"reported,")
+print("  not substituted.")
 ''')
 
 # ===========================================================================
@@ -1255,6 +1360,8 @@ Every stage ran on real data. The look-ahead guard held, the alignment assertion
 | **Crisis-day shortage** | §3, §9 | The test block contains too few Hurst-turbulent days to estimate a regime coefficient. H1b — the hypothesis the thesis rests on — cannot be run at this sample length. | Start the sample at 2003, spanning 2008 and 2020. This is a *sample* reduction, not a precision one: no amount of extra compute on this window fixes it. |
 | **Permutation-*p* floor** | §4 | With *m* surrogates no *p* can fall below 1/(*m*+1), and BH across 90 pairs needs many pairs at that floor before any edge survives. The edge count is capped by the surrogate budget, not by the data. | Raise *m* to 1000. The estimator cost is linear in *m*, so this is purely a time purchase. |
 
+§4b adds a third item that is *not* a scope artefact and does not go away when the knobs come up: the surrogate null is a modelling choice, the pilot and the Lee & Cho baseline made the other one, and the two are only comparable on a matched null. That table belongs in the results chapter, not in the limitations.
+
 ### 3. Runtime, honestly
 
 The cell below extrapolates from this run's measured timings. The dominant cost is training: seeds × epochs × arms, and the thesis α grid has more arms. It is an estimate of the *serial* cost — the α arms are embarrassingly parallel, so real wall-clock on a multi-core box or a GPU is a fraction of it.
@@ -1284,8 +1391,8 @@ train_now = len(SEEDS) * EPOCHS * n_arms_now
 train_full = FULL["seeds"] * FULL["epochs"] * n_arms_full
 # the thesis sample is longer, so each epoch costs more, roughly linearly in rows
 sample_factor = 21.3 / ((pd.Timestamp(END) - pd.Timestamp(START)).days / 365.25)
-surr_now  = M_SURROGATES * len(ALPHA_GRID)
-surr_full = FULL["m_surrogates"] * len(FULL["alpha_grid"])
+surr_now  = M_SURROGATES * (len(ALPHA_GRID) + len(ALT_NULL_ALPHAS))
+surr_full = FULL["m_surrogates"] * (len(FULL["alpha_grid"]) + len(ALT_NULL_ALPHAS))
 
 est = pd.DataFrame([
     ("This run, measured", f"{elapsed/60:.1f} min", "wall clock, end to end"),
@@ -1293,7 +1400,8 @@ est = pd.DataFrame([
      f"seeds×epochs×arms: {train_full:,} vs {train_now:,}"),
     ("Sample-length factor", f"{sample_factor:.1f}x", "thesis sample is longer per epoch"),
     ("ER-TE work ratio", f"{surr_full/surr_now:.0f}x",
-     f"surrogates×alphas: {surr_full:,} vs {surr_now:,}"),
+     f"surrogates×alphas incl. the §4b alt-null sweep: "
+     f"{surr_full:,} vs {surr_now:,}"),
     ("Thesis run, serial estimate",
      f"{elapsed * (train_full/train_now) * sample_factor / 3600:.0f}–"
      f"{elapsed * (train_full/train_now) * sample_factor * 1.5 / 3600:.0f} hours",

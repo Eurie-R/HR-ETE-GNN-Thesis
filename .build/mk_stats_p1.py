@@ -85,6 +85,8 @@ LOOKBACK     = 20
 RV_WINDOW    = 20
 ALPHA_GRID   = [0.5, 1.0, 1.5]         # 1.0 == Shannon == the baseline
 M_SURROGATES = 200                     # >= 200 needed for a usable permutation p-value
+SURROGATE     = 'circular'             # PRIMARY null. 'shuffle' is the robustness arm.
+SURROGATE_ALT = 'shuffle'              # the pilot's null, and Lee & Cho's Eq (4) null
 KNN_K        = 4
 FDR_Q        = 0.10
 MATCHED_K    = 20                      # edges per graph in the matched-density comparison
@@ -97,6 +99,7 @@ print("Pre-registration frozen.")
 print(f"  primary metric : {PRIMARY_METRIC}")
 print(f"  primary test   : {PRIMARY_TEST}, one-sided at {PRIMARY_LEVEL}")
 print(f"  seeds per arm  : {len(SEEDS)}   surrogates per pair : {M_SURROGATES}")
+print(f"  surrogate null : {SURROGATE}   (robustness arm: {SURROGATE_ALT})")
 ''')
 
 md("""
@@ -210,15 +213,31 @@ def _te_from_blocks(Xtp1, Xt, Yt, alpha, k, cache=None):
     return (H_xtp1_x - H_x) - (H_full - H_xy)
 
 
+SURROGATE_NULLS = ('circular', 'shuffle')
+
 def effective_rte(y, x, alpha, k=KNN_K, m_surrogates=M_SURROGATES, seed=0,
-                  copula=True, surrogate='circular', lag=1):
+                  copula=True, surrogate=SURROGATE, lag=1):
     """ER-TE with an exact permutation p-value. Returns (erte, z, p).
+
+    Two nulls, testing different hypotheses:
+      'circular' -- rotate Y by a random offset. Kills the Y->X dependence,
+                    KEEPS Y's own autocorrelation. Null: "Y says nothing about
+                    X beyond X's own past."  This is the primary null.
+      'shuffle'  -- full permutation of Y. Kills both. Null: "Y is i.i.d."
+                    Returns are serially dependent, so this null is easier to
+                    reject: the surrogate TE is biased low, too little bias is
+                    subtracted, and ER-TE and significance are both inflated.
+    The pilot used 'shuffle', and so does Lee & Cho's Eq (4), which is why it is
+    kept as a robustness arm rather than deleted. Quote the null with the number.
 
     Speed: H(X_t) and H(X_{t+1},X_t) do not involve Y, so they are computed once
     and reused across all surrogates. The copula transform is likewise applied
     once -- rank-transforming a shifted series equals shifting the ranks, because
-    ranks are equivariant under permutation.
+    ranks are equivariant under permutation. Both nulls are permutations of Y, so
+    that shortcut is valid for either.
     """
+    if surrogate not in SURROGATE_NULLS:
+        raise ValueError(f"surrogate must be one of {SURROGATE_NULLS}, got {surrogate!r}")
     rng = np.random.default_rng(seed)
     Xtp1, Xt, Yt = _te_blocks(y, x, lag)
     if copula:
@@ -229,15 +248,15 @@ def effective_rte(y, x, alpha, k=KNN_K, m_surrogates=M_SURROGATES, seed=0,
 
     n = len(Yt); surr = np.empty(m_surrogates)
     for i in range(m_surrogates):
-        Ys = np.roll(Yt, int(rng.integers(1, n))) if surrogate == 'circular' \\
-             else rng.permutation(Yt)
+        Ys = (np.roll(Yt, int(rng.integers(1, n))) if surrogate == 'circular'
+              else rng.permutation(Yt))
         surr[i] = _te_from_blocks(Xtp1, Xt, Ys, alpha, k, cache=cache)
 
     bias, sd = np.nanmean(surr), np.nanstd(surr, ddof=1)
     erte = obs - bias
     return erte, erte/(sd + 1e-12), (1.0 + np.sum(surr >= obs))/(m_surrogates + 1.0)
 
-print("ER-TE estimator defined.")
+print(f"ER-TE estimator defined.  Primary surrogate null: {SURROGATE}.")
 ''')
 
 md("""
@@ -246,6 +265,8 @@ md("""
 An estimator should be tested on data whose answer is known. We build a system where **Y genuinely drives X** with a one-day lag and nothing flows the other way, then check that the estimator recovers exactly that.
 
 Three things must hold: Y→X is detected, X→Y is *not* falsely detected, and two independent series produce nothing.
+
+The same system also settles the surrogate-null question by measurement instead of by argument. `y_s` is deliberately autocorrelated (AR(1), φ = 0.5), exactly like a return series, and nothing flows X→Y — so the reverse direction is a *known* null, and the two surrogate nulls can be scored on how often they get it wrong.
 """)
 
 code('''
@@ -272,6 +293,46 @@ print(f"\\nTrue direction detected at every alpha : {(val['p (Y->X)'] < 0.05).al
 print(f"Reverse direction correctly rejected   : {(val['p (X->Y)'] > 0.05).all()}")
 print(f"Independent pair correctly rejected    : {(val['p (independent)'] > 0.05).all()}")
 print(f"\\n{'ESTIMATOR VALIDATED' if ok else 'VALIDATION FAILED - do not proceed'}")
+''')
+
+md("""
+### Which surrogate null? Scored where the answer is known
+
+`y_s` is autocorrelated and does **not** cause X→Y, so in the table below every X→Y or independent-pair rejection is a false positive and every Y→X rejection is a true one. Running both nulls over the same three series turns a methodological argument into a measurement.
+
+What to expect: both nulls recover the real Y→X edge, but the shuffled null — which must also explain away `y_s`'s own persistence — returns smaller *p*-values in the reverse direction and larger ER-TE magnitudes, because too little bias has been subtracted. That inflation is why `SURROGATE = 'circular'` is the primary specification and `'shuffle'` is only ever a robustness arm. It is also why the pilot's edge counts, and Lee & Cho's, are not directly comparable to the ones in §4 unless the null is matched.
+""")
+
+code('''
+null_rows = []
+for s_null in SURROGATE_NULLS:
+    for a in ALPHA_GRID:
+        e_true, _, p_true = effective_rte(y_s, x_s, a, surrogate=s_null)
+        e_rev,  _, p_rev  = effective_rte(x_s, y_s, a, surrogate=s_null)
+        _,      _, p_ind  = effective_rte(u_s, v_s, a, surrogate=s_null)
+        null_rows.append({'null': s_null, 'alpha': a,
+                          'ER-TE (Y->X)': e_true, 'p (Y->X)': p_true,
+                          'ER-TE (X->Y)': e_rev,  'p (X->Y)': p_rev,
+                          'p (independent)': p_ind})
+
+nulls = pd.DataFrame(null_rows).set_index(['null', 'alpha'])
+print("SURROGATE NULL COMPARISON -- X->Y and 'independent' are both TRUE nulls\\n")
+display(nulls.round(4))
+
+n_a = len(ALPHA_GRID)
+score = pd.DataFrame([
+    {'null': g,
+     f'true edge found (of {n_a})':      int((d['p (Y->X)'] < .05).sum()),
+     f'false positives (of {2*n_a})':    int((d['p (X->Y)'] < .05).sum()
+                                             + (d['p (independent)'] < .05).sum()),
+     'mean ER-TE, true direction':       d['ER-TE (Y->X)'].mean(),
+     'mean |ER-TE| under the null':      d['ER-TE (X->Y)'].abs().mean(),
+     'smallest p in the null direction': d['p (X->Y)'].min()}
+    for g, d in nulls.reset_index().groupby('null')]).set_index('null')
+display(score.round(4))
+
+print("Larger null-direction ER-TE, or a smaller p there, is y_s's own")
+print("autocorrelation being scored as information flow from X.")
 ''')
 
 md("""
