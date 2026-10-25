@@ -1,0 +1,1361 @@
+% =====================================================================
+%  HR-ETE-GNN: Robust Volatility Forecasting via Hurst-Regime-Adaptive
+%  Rényi Effective Transfer Entropy Graph Neural Networks
+%
+%  Undergraduate thesis -- Lorenzo Uriel L. Ramoy
+%  Converted from [RAMOY]Thesis_Manuscript.docx
+%
+%  Compile with pdfLaTeX (Overleaf default).
+% =====================================================================
+\documentclass[12pt,oneside]{report}
+
+% ---------- Encoding & fonts ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}       % must load before newtxmath
+\usepackage{newtxtext,newtxmath}   % Times New Roman look, as in the .docx
+\usepackage{microtype}
+\setlength{\emergencystretch}{3em}
+
+% ---------- Page layout ----------
+\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage{setspace}
+\doublespacing                     % the .docx uses double spacing
+
+% ---------- Math ----------
+\DeclareMathOperator{\QLIKE}{QLIKE}
+\DeclareMathOperator{\ETE}{ETE}
+\DeclareMathOperator{\ERTE}{ERTE}
+\DeclareMathOperator{\ReLU}{ReLU}
+
+% ---------- Tables, lists ----------
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{caption}
+\captionsetup[table]{labelfont=bf,textfont=bf,justification=raggedright,
+                     singlelinecheck=false,labelsep=space}
+
+% ---------- Headings: "CHAPTER I" / "INTRODUCTION" ----------
+\usepackage{titlesec}
+\renewcommand{\thechapter}{\Roman{chapter}}
+\renewcommand{\thesection}{\arabic{chapter}.\arabic{section}}
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\centering}
+  {\MakeUppercase{\chaptertitlename}\ \thechapter}
+  {0pt}
+  {\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{0pt}{24pt}
+\titleformat{\section}{\normalfont\bfseries}{\thesection}{0.5em}{}
+\titleformat{\subsection}{\normalfont\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalfont\bfseries}{\thesubsubsection}{0.5em}{}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+
+% Table numbers follow the section, e.g. "Table 3.5.1"
+\usepackage{chngcntr}
+\counterwithin{table}{section}
+\counterwithin{figure}{section}
+
+% ---------- Front-matter headings ----------
+\renewcommand{\contentsname}{TABLE OF CONTENTS}
+\renewcommand{\listfigurename}{LIST OF FIGURES}
+\renewcommand{\listtablename}{LIST OF TABLES}
+\renewcommand{\bibname}{BIBLIOGRAPHY}
+\renewcommand{\appendixname}{APPENDIX}
+
+% ---------- Links ----------
+\usepackage[hidelinks]{hyperref}
+\usepackage{bookmark}
+
+% Unnumbered chapter-level heading that still appears in the ToC
+\newcommand{\frontchapter}[1]{%
+  \chapter*{#1}\addcontentsline{toc}{chapter}{#1}}
+
+% =====================================================================
+\begin{document}
+\pagenumbering{roman}
+
+% ---------------------------------------------------------------------
+% Title page
+% ---------------------------------------------------------------------
+\begin{titlepage}
+\centering
+\singlespacing
+{\bfseries HR-ETE-GNN: Robust Volatility Forecasting via\\
+Hurst-Regime-Adaptive Rényi Effective Transfer Entropy\\
+Graph Neural Networks\par}
+\vspace{2cm}
+A Thesis\\[0.5em]
+Presented to the\\
+Department of Information Systems\\
+and Computer Science\\
+Ateneo de Manila University\par
+\vspace{2cm}
+In Partial Fulfillment\\
+of the Requirements for the Degree\\
+Bachelor of Science in Computer Science\par
+\vspace{2cm}
+by\\[0.5em]
+{\bfseries Lorenzo Uriel L. Ramoy}\par
+\vspace{1cm}
+{\bfseries Advisor: Dr. John Paul Vergara}\par
+\vfill
+2026
+\end{titlepage}
+\setcounter{page}{2}
+
+% ---------------------------------------------------------------------
+% Abstract
+% ---------------------------------------------------------------------
+\frontchapter{ABSTRACT}
+
+Accurate volatility forecasting is critical for portfolio optimization,
+risk management, and derivatives pricing. Recent work by Lee and Cho
+(2025) demonstrated that Hurst Exponent Effective Transfer Entropy Graph
+Neural Network (H-ETE-GNN) which constructs directed inter-asset graphs
+from Shannon-based Effective Transfer Entropy (ETE) and adapts to regime
+changes via the Hurst exponent outperforms traditional univariate and
+correlation-based models for one-day-ahead realized volatility
+prediction. However, the authors acknowledged that their model's
+performance deteriorates during extreme market conditions, attributing
+this to Shannon entropy's equal weighting of all regions of the return
+distribution, which dilutes tail-event information that dominates crisis
+periods. This paper addresses that limitation by replacing the
+Shannon-based ETE with Effective Rényi Transfer Entropy (ER-TE) which is
+a generalization grounded in the theoretical framework of Jizba,
+Lavička, and Tabachová (2022) where a tunable order parameter $\alpha$
+allows the measure to emphasize rare, extreme events ($\alpha < 1$) or
+typical events ($\alpha > 1$), reducing to Shannon TE at
+$\alpha \to 1$. We denote the resulting architecture
+\textbf{HR-ETE-GNN} (Hurst + Rényi Effective Transfer Entropy Graph
+Neural Network). Using daily price data of 10 major country-level ETFs
+over 19 years (2003--2024), Forecasting performance is assessed via
+QLIKE as the primary metric for comparing model performance.
+
+% ---------------------------------------------------------------------
+% Acknowledgements
+% ---------------------------------------------------------------------
+\frontchapter{ACKNOWLEDGEMENTS}
+
+I would like to thank Dr. John Paul Vergara for guiding me throughout
+the whole thesis process through his advice and consultations. I would
+also extend my gratitude to Dr. Clark Go for helping me with this paper
+by providing me with the resources and advice in understanding the
+concepts.
+
+% ---------------------------------------------------------------------
+% Lists
+% ---------------------------------------------------------------------
+\begingroup
+\singlespacing
+\tableofcontents
+\clearpage
+\phantomsection\addcontentsline{toc}{chapter}{LIST OF FIGURES}
+\listoffigures
+\clearpage
+\phantomsection\addcontentsline{toc}{chapter}{LIST OF TABLES}
+\listoftables
+\endgroup
+
+\clearpage
+\pagenumbering{arabic}
+
+% =====================================================================
+\chapter{INTRODUCTION}\label{ch:intro}
+% =====================================================================
+
+\section{Context of the Study}
+
+Volatility prediction in financial markets is important when it comes to
+risk management \cite{andersen2003,engle2004}. Volatility refers to the
+magnitude of fluctuations in an asset's returns over a given time
+horizon. Formally, it is most commonly operationalized as the standard
+deviation of asset returns and serves as the measure of financial risk
+in modern asset pricing, and portfolio construction
+\cite{andersen2003,engle2004}. In recent years, different models were
+employed to forecast volatility ranging from traditional models like
+Generalized Autoregressive Conditional Heteroskedasticity (GARCH)
+\cite{bollerslev1986} to deep learning models like Long Short-Term
+Memory (LSTM) \cite{hochreiter1997}. Among the latter, Graph Neural
+Networks (GNNs) have been used as a model for financial time series
+because of their capabilities to model interdependencies among assets in
+a graph, where nodes represent individual securities and edges encode
+the strength and direction of inter-asset relationships \cite{chen2023}.
+
+The graph tells the network which assets influence which. Granger
+Causality introduces directionality but assumes linearity and
+stationarity \cite{granger1969}. Transfer Entropy (TE), introduced by
+Schreiber \cite{schreiber2000}, offers a model-free, non-parametric
+measure of directional information flow that captures both linear and
+non-linear dependencies, making it theoretically superior for financial
+data characterized by fat tails, volatility clustering, and asymmetric
+dependence structure \cite{behrendt2019}.
+
+Lee and Cho \cite{lee2025} proposed a hybrid model that further advances
+the proposed models with the H-ETE-GNN model which integrates three
+components: (1) Effective Transfer Entropy that corrects a positive bias
+that Transfer Entropy creates introduced by Marschinski and Kantz
+\cite{marschinski2002}. This was used to quantify information flow among
+ten country exchange-traded funds (ETFs). (2) A Graph Convolutional
+Network (GCN). It is then used to construct graph convolutional networks
+utilizing ETE-based graphs to forecast one-day-ahead realized
+volatility. (3) A Hurst-exponent-based regime detection mechanism that
+retrains the graph when the market transitions between persistent and
+anti-persistent states. Their empirical results over a 19-year sample
+(2003--2024) demonstrated significant improvements over LSTM, GRU, and
+GNN baselines using Granger Causality, Pearson Correlation, or standard
+Transfer Entropy as edge metrics.
+
+However, Lee and Cho \cite{lee2025} identified a limitation with their
+hybrid model. The model's performance degraded during extreme market
+events. They attributed this degradation to two factors: the Hurst
+exponent operating under a monofractal assumption, which may not fully
+capture the asymmetric and complex nature of the market structure; and
+the limitation of ETE in detecting extreme, localized nonlinear
+interactions, potentially missing crucial regime changes. This has led
+them to recommending algorithms that can detect event significance or
+extreme probabilities. One of their recommendations to incorporate
+extreme probabilities is Rényi-entropy-based Transfer Entropy to better
+capture key information flow, increasing its robustness and adaptability
+across diverse market regimes, including crises.
+
+\section{Research Objectives}
+
+The objective of this research is to develop and evaluate HR-ETE-GNN, a
+Hurst regime-adaptive graph neural network that employs Effective Rényi
+Transfer Entropy (ER-TE) in place of Shannon-based Transfer Entropy for
+one-day-ahead realized-volatility (RV) forecasting across country-level
+iShares MSCI ETFs, with the aim of improving forecast robustness under
+extreme market regimes while preserving calm-period performance. This
+study operationalizes Lee and Cho's \cite{lee2025} recommendations of
+their H-ETE-GNN hybrid model and the theoretical results of Rényi
+Transfer Entropy of Jizba, Lavička, and Tabachová \cite{jizba2022}.
+
+In support of this, the specific objectives are as follows:
+
+\begin{enumerate}
+  \item Design and implement an ER-TE based adjacency construction using
+        Rényi entropy with shuffled-surrogate bias correction that
+        substitutes Shannon ETE in the H-ETE-GNN pipeline.
+  \item To evaluate whether HR-ETE-GNN based graph construction yields
+        statistically significant reduction in expected forecast loss
+        relative to H-ETE-GNN.
+  \item To compare ER-TE and Shannon ETE network topologies across crisis
+        and non-crisis windows, identifying whether tail-sensitive
+        information flow changes which countries are dominant
+        transmitters of volatility information.
+\end{enumerate}
+
+\section{Research Questions}
+
+\begin{enumerate}
+  \item Does replacing Shannon-Based Effective Transfer Entropy (ETE)
+        with Effective Rényi Transfer Entropy (ER-TE) as the graph
+        construction metric in the Graph Neural Network of the H-ETE-GNN
+        framework:
+        \begin{enumerate}[label=(\alph*)]
+          \item Produce a statistically significant reduction in expected
+                QLIKE loss for one-day-ahead realized-volatility forecasts
+                relative to H-ETE-GNN
+        \end{enumerate}
+  \item When the directed weighted adjacency matrix is reconstructed from
+        ER-TE versus Shannon ETE on the same crisis and non-crisis
+        windows;
+        \begin{enumerate}[label=(\alph*)]
+          \item Does the resulting topology differ in a measurable way --
+                specifically, do the \textbf{top volatility information
+                transmitters change} identity under tail sensitive
+                $\alpha < 1$ measurement during crisis periods relative to
+                Shannon measurement
+        \end{enumerate}
+\end{enumerate}
+
+\section{Scope and Limitations}\label{sec:scope}
+
+\subsubsection*{Scope}
+
+The analysis is restricted to ten country-level iShares MSCI ETFs (EWA,
+EWC, EWG, EWJ, EWT, EWU, EWW, EWY, EWZ, and EZA), observed at daily
+frequency from February 2003 through May 2024. The MSCI World ETF is
+used exclusively as a global regime proxy for Hurst-based detection and
+is not included in the forecasting target.
+
+In advancing the H-ETE-GNN hybrid model, only the entropy basis used for
+graph construction is changed. The multi-scale 1D convolution, three GCN
+layers, MSE loss, Adam optimizer, and early-stopping criteria are held
+identical to Lee and Cho \cite{lee2025}. ER-TE is estimated with
+$k = 1$, an $\alpha$-grid of $\{0.3, 0.5, 0.7, 0.9, 1.0, 1.5, 2.0\}$, and
+$m$-shuffled surrogates for bias correction. Comparisons are drawn
+against ETE-GNN, TE-GNN, Granger-GNN, Pearson-GNN, GRU, LSTM, and
+H-ETE-GNN as the primary baseline.
+
+The study does not consider intraday data, alternative
+realized-volatility measures, sector or single-stock universes,
+attention-based architectures such as GAT, or adaptive/regime-contingent
+$\alpha$ selection.
+
+\subsubsection*{Limitations}
+
+\begin{enumerate}
+  \item A vanilla GCN without attention is retained to preserve
+        cleanliness, and a GAT-style mechanism is deferred to avoid
+        confounding attribution.
+  \item The k-NN Rényi Transfer estimator exhibits higher variance at
+        extreme $\alpha$ values and in higher dimensions; results at
+        $\alpha = 0.3$ fall below the theoretical $\alpha$-Gaussian
+        validity lower bound of $\alpha > 0.4$ for $k = 1$ and are
+        reported with caution.
+  \item The use of a single global regime proxy (MSCI World) presumes a
+        synchronized regime shift across all countries and may fail to
+        capture regional differences.
+  \item Comparisons against the secondary benchmarks are descriptive. The
+        results do not establish that HR-ETE-GNN is superior to any model
+        other than H-ETE-GNN.
+\end{enumerate}
+
+\section{Significance of Study}
+
+The study directly operationalizes the stated recommendations of Lee and
+Cho \cite{lee2025} that non-Shannon entropies are to be explored within
+the H-ETE-GNN framework by providing a calibrated $\alpha$-grid and a
+regime-stratified evaluation protocol. In bridging non-Shannon
+entropies, we implement the information-theoretic framework of Jizba,
+Lavička, and Tabachová \cite{jizba2022} on Rényi Transfer Entropy with
+the H-ETE-GNN model. By grounding graph construction in a tunable-order
+entropy, the work supplies a principled rationale for why tail-sensitive
+$\alpha < 1$ should matter precisely when returns deviate from
+Gaussianity, and why it should be immaterial when they do not.
+
+The study also provides a structural comparison between the topology of
+the networks of a Shannon-ETE and an ER-TE network, revealing whether
+different countries emerge as dominant volatility transmitters under
+tail-sensitive measurement.
+
+Lastly, the realized-volatility forecasts are direct inputs to different
+finance applications like Value-at-Risk, options pricing, and dynamic
+hedging. If an ER-TE-based graph construction improves crisis-period RV
+forecasts, this could have direct implications for approaches in
+portfolio-level risk limits.
+
+% =====================================================================
+\chapter{REVIEW OF RELATED LITERATURE}\label{ch:rrl}
+% =====================================================================
+
+\section{Theoretical Framework}
+
+\subsection{Shannon Entropy and Transfer Entropy}
+
+Let $X = \{x_i\}$ be a discrete random variable with probability
+distribution $P(X)$. The Shannon entropy of $X$ is defined as:
+\[
+  H(X) = -\sum_{x} p(x)\log_{2} p(x)
+\]
+
+Shannon entropy measures the average uncertainty (in bits) associated
+with the outcome of $X$. Mutual information, on the other hand,
+quantifies the statistical dependence of two variables. The mutual
+information for two random variables $X$ and $Y$, denoted by $I(X;Y)$,
+can be seen as follows:
+\[
+  I(X;Y) = H(X) + H(Y) - H(X,Y) = H(X) - H(X \mid Y)
+\]
+Where $H(X)$ is the Shannon entropy of a random variable $X$ and
+$H(X \mid Y)$ denotes the conditional entropy representing the
+uncertainty of $X$ given $Y$.
+
+The concept of Mutual Information (MI) is extended to Shannon Transfer
+Entropy (TE) by conditioning on $X$'s own past \cite{schreiber2000}. TE
+measures the flow of information between two time series $X$ and $Y$ by
+measuring how much the past of $Y$ reduces uncertainty about the next
+value of $X$, beyond what $X$'s own past already provides:
+\[
+  TE_{Y \rightarrow X}^{(k,l)}
+    = H\bigl(X_{t+1} \mid X_{t}^{(k)}\bigr)
+    - H\bigl(X_{t+1} \mid X_{t}^{(k)}, Y_{t}^{(l)}\bigr)
+\]
+\[
+  TE_{Y \rightarrow X}^{(k,l)}
+    = \sum_{i} p\bigl(x_{t+1}, x_{t}^{(k)}, y_{t}^{(l)}\bigr)
+      \log\frac{p\bigl(x_{t+1} \mid x_{t}^{(k)}, y_{t}^{(l)}\bigr)}
+               {p\bigl(x_{t+1} \mid x_{t}^{(k)}\bigr)}
+\]
+Where $X_{t}^{(k)} = (x_{t}, x_{t-1}, \ldots, x_{t-k+1})$ and
+$Y_{t}^{(l)} = (y_{t}, y_{t-1}, \ldots, y_{t-l+1})$ denote the past $k$
+values of $X$ and past $l$ values of $Y$. The conditional probability
+$p(x_{t+1} \mid x_{t}^{(k)}, y_{t}^{(l)})$ measures how much better the
+probability of $x_{t+1}$ is predicted when we incorporate the past
+information of $Y$ along with $X$. The sum is then calculated over all
+possible joint combinations of $(x_{t+1}, x_{t}^{(k)}, y_{t}^{(l)})$. TE
+is then simplified to:
+\[
+  TE_{Y \rightarrow X}
+    = \sum_{i} p(x_{t+1}, x_{t}, y_{t})
+      \log\frac{p(x_{t+1} \mid x_{t}, y_{t})}{p(x_{t+1} \mid x_{t})}
+\]
+
+\subsection{Effective Transfer Entropy}
+
+TE, although it captures nonlinear and asymmetric dependencies, can lead
+to a positive bias where TE cannot be negative, finite-sample noise
+accumulates in one direction only, leaving a strictly positive
+measurement even between unrelated series when estimated from finite
+samples. Marschinski and Kantz \cite{marschinski2002} introduced
+Effective Transfer Entropy (ETE) to correct this:
+\[
+  \ETE(X \rightarrow Y)
+    = TE_{\text{observed}}(X \rightarrow Y)
+    - \operatorname{mean}\bigl(TE_{\text{shuffled}}(X \rightarrow Y)\bigr)
+\]
+
+Shuffling destroys the temporal structure of $Y$ while preserving its
+marginal distribution. The $TE_{\text{shuffled}}(X \rightarrow Y)$
+estimates the finite-sample bias and the statistical significance is
+assessed via a Z-score:
+\[
+  Z = \frac{TE_{X \rightarrow Y} - \mu_{\text{shuffled}}}{\sigma_{\text{shuffled}}}
+\]
+Only ETE values with $Z > 1.96$ are retained in the adjacency matrix;
+all others are set to zero, yielding a sparse, directed graph.
+
+\subsection{Rényi Entropy}
+
+Rényi entropy \cite{renyi1961} for order $\alpha$ with probability
+distribution $P$ on a finite sample $X$ is defined as:
+\[
+  H_{\alpha}(P) = \frac{1}{1-\alpha}\log\sum_{x \in X} p^{\alpha}(x)
+\]
+
+Rényi entropy (RE) corresponds to the average number of bits needed to
+optimally encode the discrete source $X$ with probability $P(X)$
+\cite{jizba2022}. For $\alpha > 1$, RE depends more on the probabilities
+of the more probable values and less on the improbable ones. Meanwhile,
+for $0 < \alpha < 1$, extreme events are accentuated with decreasing
+$\alpha$. By choosing different values of $\alpha$, we can focus on
+specific regions of the distribution, critically on the tail events that
+drive crisis-period dynamics in financial markets.
+
+\subsection{Rényi Transfer Entropy}
+
+Following Jizba, Lavička, and Tabachová \cite{jizba2022}, the Rényi
+Transfer Entropy of order $\alpha$ from $Y$ to $X$ is defined as:
+\[
+  T_{\alpha, Y \rightarrow X}^{R}(k,l)
+    = H_{\alpha}\bigl(X_{t_{n+1}} \mid X_{n}^{(k)}\bigr)
+    - H_{\alpha}\bigl(X_{t_{n+1}} \mid X_{n}^{(k)}, Y_{n}^{(l)}\bigr)
+    = I_{\alpha}\bigl(X_{t_{n+1}} : Y_{n}^{(l)} \mid X_{n}^{(k)}\bigr)
+\]
+Where $H_{\alpha}(X \mid Y)$ is the conditional entropy of order $\alpha$
+and $I_{\alpha}(X:Y)$ is the mutual information of order $\alpha$.
+Explicitly:
+\[
+  H_{\alpha}(X \mid Y)
+    = \frac{1}{1-\alpha}\log_{2}
+      \frac{\sum_{x \in X, y \in Y} p^{\alpha}(x,y)}{\sum_{y \in Y} p^{\alpha}(y)}
+\]
+\[
+  I_{\alpha}(X:Y)
+    = \frac{1}{1-\alpha}\log_{2}
+      \frac{\sum_{x \in X, y \in Y} p^{\alpha}(x)\,p^{\alpha}(y)}
+           {\sum_{x \in X, y \in Y} p^{\alpha}(x,y)}
+\]
+
+Its difference from Shannon TE lies in three components: (1)
+\textbf{Tail sensitivity}, the escort distribution $p^{\alpha}$
+reweights the joint probability inside the log, allowing $\alpha < 1$ to
+amplify rare-event contributions. (2) \textbf{Can be negative}, unlike
+Shannon TE, RTE can take negative values. This occurs when knowing $Y$'s
+past actually increases uncertainty about $X$ under the Rényi measure.
+(3) \textbf{Shannon limit}, at $\alpha = 1$, Rényi TE reduces to Shannon
+TE via L'Hôpital.
+
+\subsection{Key Theorems}\label{sec:theorems}
+
+\textbf{Jizba et al.'s Theorem 3.1 (Gaussian Equivalence).} If the joint
+process $(X_{t}, Y_{t})$ is Gaussian then there is an exact equivalence
+between Granger Causality and RTE, namely:
+\[
+  F_{Y \rightarrow X}^{(k,l)} = 2\,T_{\alpha, Y \rightarrow X}^{R}(k,l)
+\]
+Where $F_{Y \rightarrow X}^{(k,l)}$ is the standard Granger Causality
+measure. This result is $\alpha$-independent, meaning that for Gaussian
+data, the choice of $\alpha$ is immaterial --- all values give the same
+causal inference. This guarantees that the Rényi extension does not
+distort inference during calm periods when returns are approximately
+Gaussian \cite{jizba2022}.
+
+\textbf{Jizba et al.'s Theorem 3.2 (Heavy-tail Correction).} If the
+joint process $(X_{t}, Y_{t})$ is $\alpha$-Gaussian with
+$\alpha \in \bigl(\frac{1+k+l}{3+k+l}, 1\bigr]$ (i.e., finite covariance
+matrix region), then
+$F_{Y \rightarrow X}^{(k,l)} = 2\,T_{\alpha, Y \rightarrow X}^{R}(k,l)$
+is a monotonically decreasing function of $\alpha$ (at fixed $k$ and
+$l$) with zero reached at $\alpha = 1$. The leading correction is:
+\[
+  F_{Y \rightarrow X}^{(k,l)}
+    = 2\,T_{\alpha, Y \rightarrow X}^{R}(k,l)
+    + \frac{l(\alpha - 1)^{2}}{4}
+    + O\bigl((\alpha - 1)^{3}\bigr)
+\]
+
+This theorem is relevant to financial returns as they exhibit heavy
+tails, meaning they deviate from Gaussianity. For such data, Shannon TE
+($\alpha = 1$) and Granger Causality give the same answer, but moving
+$\alpha < 1$ captures additional tail-driven information flow that the
+Gaussian Equivalence misses. The correction term $l(\alpha - 1)^{2}/4$
+quantifies exactly how much additional information is extracted
+\cite{jizba2022}.
+
+\subsection{Effective Rényi Transfer Entropy}
+
+Similar to the Shannon case, we define Effective Rényi Transfer Entropy
+by subtracting the RTE computed on surrogate time series:
+\[
+  \ERTE_{\alpha, Y \rightarrow X}
+    = T_{\alpha, Y \rightarrow X}^{R}
+    - T_{\alpha, Y_{\text{surrogate}} \rightarrow X}^{R}
+\]
+Where $Y_{\text{surrogate}}$ is a phase-randomized surrogate series that
+preserves the marginal distribution and autocorrelation of $Y$ but
+destroys its temporal relationship with $X$. This construction,
+following Jizba et al.~\cite[Eq.~49]{jizba2022}, removes finite-sample
+bias while preserving the tail-sensitivity of the Rényi measure.
+
+The balance of effective transfer entropy further quantifies the net
+direction of information flow:
+\[
+  \ERTE_{\alpha, Y \rightarrow X}^{\text{balance}}
+    = \ERTE_{\alpha, Y \rightarrow X} - \ERTE_{\alpha, X \rightarrow Y}
+\]
+
+\subsection{Hurst Exponent and Regime Adaptation}
+
+The Hurst Exponent $H$ is estimated via Rescaled Range (R/S) analysis on
+a rolling window of length $w$ \cite{hurst1951}. For a time series
+segment $T_{i}$ of length $w$, the Hurst Exponent is utilized to
+identify regime changes by analyzing the structure of the time series
+data. It is an effective tool to interpret the complex patterns seen in
+financial time series data.
+
+Given a time series $X = \{x_{1}, x_{2}, \ldots, x_{n}\}$, we partition
+these into segments of length $w$. This results in a series of segments
+given by $X_{w} = \{T_{1}, T_{2}, \ldots, T_{m}\}$. We define each
+segment as $T_{i} = \{x_{(i-1)w+1}, x_{(i-1)w+2}, \ldots, x_{iw}\}$,
+where the total number of segments is $m = \lfloor n/w \rfloor$. By
+calculating the rescaled range (R/S) values across these scales, the
+scaling relationship of the time series can be determined. For a time
+series segment $T_{i}$ of length $w$:
+
+\begin{enumerate}
+  \item We first compute the segment mean:
+        $\overline{T}_{i} = \frac{1}{w}\sum_{j=1}^{w} x_{(i-1)w+j}$
+  \item Compute the cumulative deviation:
+        $Y_{k}^{(i)} = \sum_{j=1}^{k}\bigl(x_{(i-1)w+j} - \overline{T}_{i}\bigr)$
+  \item Compute the range:
+        $R_{i} = \max_{1 \le k \le w} Y_{k}^{(i)} - \min_{1 \le k \le w} Y_{k}^{(i)}$
+  \item Compute the standard deviation:
+        $S_{i} = \sqrt{\frac{1}{w}\sum_{j=1}^{w}\bigl(x_{(i-1)w+j} - \overline{T}_{i}\bigr)^{2}}$
+  \item The rescaled range R/S is given by
+        $\left(\frac{R}{S}\right)_{w} = \frac{1}{m}\sum_{i=1}^{m}\frac{R_{i}}{S_{i}}$
+\end{enumerate}
+
+$H$ is then estimated by regressing $\log(R/S)_{w}$ on $\log w$ via
+Ordinary Least Squares (OLS).
+
+Regime classification follows Lee and Cho (2025): using a rolling
+250-day window on the MSCI World ETF (as a global proxy), a binary
+regime label is assigned based on whether the proportion of days with
+$H > 0.5$ in a trailing 10-day window exceeds a sensitivity threshold
+$s$. When regime transition is detected, the ER-TE adjacency matrix is
+recomputed and the GNN weights are fine-tuned (not fully retrained).
+
+\subsection{Graph Convolutional Networks}
+
+A graph $G = (V, E)$ is defined by a set of nodes $V$ and edges $E$,
+encoded in an adjacency matrix $A \in \mathbb{R}^{n \times n}$, where
+$A_{ij}$ measures the relationship from node $j$ to node $i$. In this
+thesis, each node is one of ten country-level MSCI ETFs, and the edges
+are derived from the ER-TE adjacency constructed in
+Section~\ref{sec:erte}.
+
+Classical convolutional neural networks exploit the regular grid
+structure of images or time series, where translation invariance allows
+a fixed-size kernel to be slid across the input. This assumption fails
+for graph-structured data, since nodes have variable neighborhood sizes
+and there is no canonical ordering. Graph Convolutional Networks (GCNs)
+generalize the convolution operation to the irregular domain of graphs,
+allowing each node's representation to be updated as a learned function
+of its own features and the features of its neighbors \cite{kipf2017}.
+
+The spectral approach, on which Kipf and Welling \cite{kipf2017} build,
+defines convolution through the graph Laplacian. For an undirected graph
+with adjacency $A$ and degree matrix $D$, the normalized Laplacian is
+\[
+  L = I_{n} - D^{-1/2} A D^{-1/2}
+\]
+$L$ admits an eigendecomposition of $L = U \Lambda U^{T}$, where the
+columns of $U$ form a basis of graph signals analogous to the Fourier
+Basis on Euclidean domains. A spectral graph convolution between a
+signal $x \in \mathbb{R}^{n}$ and filter $g_{\theta}$ then takes the
+form:
+\[
+  g_{\theta} * x = U g_{\theta}(\Lambda) U^{T} x
+\]
+
+Direct computation of this convolution is expensive because it requires
+the full eigendecomposition of $L$. Defferrard, Bresson, and
+Vandergheynst \cite{defferrard2016} address this by approximating
+$g_{\theta}$ with a truncated expansion in Chebyshev polynomials of
+order $K$ which localizes the filter to $K$-hop neighborhoods and
+removes the need for eigendecomposition.
+
+Kipf and Welling's first-order simplification \cite{kipf2017} further
+simplify this Chebyshev expansion to first order $K = 1$ and apply a
+renormalization trick to stabilize training yielding the layer-wise
+propagation rule:
+\[
+  H^{(l+1)} = \sigma\bigl(\widehat{D}^{-1/2}\,\widehat{A}\,\widehat{D}^{-1/2}\,H^{(l)} W^{(l)}\bigr)
+\]
+Where $\widehat{A} = A + I_{n}$ adds self-loops, $\widehat{D}$ is the
+degree matrix of $\widehat{A}$, $H^{(l)}$ is the matrix of node features
+at layer $l$, $W^{(l)}$ is a learnable weight matrix, and $\sigma$ is a
+non-linear activation. Stacking $l$ such layers allows each node to
+aggregate information from neighbors up to $l$ hops away. This
+formulation is the spatial interpretation of a spectral GCN: at every
+layer, each node's representation is updated as a weighted average of
+its neighbors' representations, with weights determined by the
+(renormalized) adjacency.
+
+\section{Direct Predecessor -- Lee and Cho (2025): H-ETE-GNN}
+
+Lee and Cho \cite{lee2025} introduced the Hurst-Exponent Effective
+Transfer Entropy Graph Neural Network (H-ETE-GNN) for one-day-ahead
+realized-volatility forecasting on ten country-level iShares MSCI ETFs
+over 2003--2024. Their hybrid model consisted of three components: (1)
+directed, sparse adjacency matrices built from Shannon-based Effective
+Transfer Entropy (ETE) with shuffled-surrogate bias correction and a
+$Z > 1.96$ significance threshold; (2) a Graph Convolutional Network
+(GCN) with multi-scale 1D temporal convolutions and three
+graph-convolution layers; (3) a Hurst-exponent-based regime-detection
+mechanism that triggers graph reconstruction and network fine-tuning
+when the market transitions between persistent ($H > 0.5$) and
+anti-persistent ($H < 0.5$) states. Against LSTM \cite{hochreiter1997},
+GRU \cite{cho2014}, and GNN baselines using Pearson correlation or
+Granger Causality \cite{granger1969} as edge metrics, H-ETE-GNN reports
+statistically significant RMSE, MAE, and QLIKE gains.
+
+Although their hybrid model performed statistically significantly better
+than the aforementioned models, they identified a limitation that
+motivates this paper. They reported that H-ETE-GNN's relative advantage
+diminishes during the 2008 Global Financial Crisis, the 2020 COVID-19
+shock, and the 2022 Russia--Ukraine episode, and they attribute this
+degradation to Shannon Entropy's uniform weighting of the probability
+distribution where tail events enter the ETE calculation with the same
+weight as routine fluctuations, despite dominating risk during crises.
+In their discussion of future work, they recommended exploring Rényi
+Transfer Entropy to capture tail-driven information flow. This paper
+operationalizes that recommendation through the HR-ETE-GNN model. The
+present paper inherits the 10-ETF universe, the 19-year sample period,
+the Hurst-based regime trigger, the multi-scale GCN architecture, the
+MSE loss, the Adam optimizer, and the early-stopping criteria without
+modification; only the entropy basis of the adjacency construction is
+varied, so that any observed performance change can be attributed to the
+Rényi generalization rather than to architectural confounders.
+
+\section{Rényi Transfer Entropy}
+
+\subsection{Jizba, Kleinert, and Shefaat (2012)}
+
+Jizba, Kleinert, and Shefaat \cite{jizba2012} applied Rényi-based
+information transfer to financial time series. Building on Shannon
+Transfer Entropy of Schreiber \cite{schreiber2000}, the authors
+introduce a Rényi-entropy generalization indexed by an order parameter
+$\alpha \geq 0$ and apply it to daily returns across major international
+stock indices. They establish empirically that $\alpha$ acts as a
+``lens'' on the return distribution: small $\alpha$ amplifies rare tail
+events, while large $\alpha$ concentrates on the distribution mode.
+Shannon TE is recovered exactly as $\alpha \to 1$. Their analysis of
+information flow across the DJIA, NIKKEI, FTSE, and DAX shows that Rényi
+TE resolves multiscale and multifractal information-transfer patterns
+that Shannon TE cannot detect, with different $\alpha$ values revealing
+qualitatively different cross-market dependence structures.
+
+This paper supplied the precedent that RTE with $\alpha \neq 1$ yields
+information beyond Shannon TE specifically on financial data,
+establishing that the present study's tunable-$\alpha$ design is not an
+unmotivated generalization. Second, it establishes the convention of
+computing RTE over an $\alpha$-grid rather than a single value. However,
+this paper stopped at descriptive analysis and did not apply RTE for
+forecasting. They also did not perform any bias correction via
+surrogates and did not integrate RTE into any machine learning pipeline.
+HR-ETE-GNN extends their work by embedding an Effective Rényi TE into a
+regime-adaptive forecasting model.
+
+\subsection{Jizba, Lavička, and Tabachová (2022)}
+
+Jizba, Lavička, and Tabachová's \cite{jizba2022} paper on causal
+inference in time series via Rényi Transfer Entropy serves as one of the
+theoretical foundations on which this paper's identification rests. They
+derived Rényi Transfer Entropy (RTE) from conditional Rényi entropy and
+Rényi mutual information and established two results that are directly
+operationalized in HR-ETE-GNN.
+
+\textbf{Theorem 3.1 (Gaussian Equivalence)} proves that for jointly
+Gaussian processes, Rényi TE equals half the Granger Causality measure
+for every value of $\alpha$. This $\alpha$-independence result is the
+theoretical justification for why the Rényi extension cannot distort
+inference during calm periods when financial returns approximate
+Gaussianity. The choice of $\alpha$ is immaterial whenever the
+underlying process is well-behaved.
+
+\textbf{Theorem 3.2 (Heavy-tail Correction)} establishes that, for an
+$\alpha$-Gaussian process with power-law tails, RTE acquires a
+correction term of leading order $l(\alpha - 1)^{2}/4$ on top of the
+Shannon-limit value, quantifying how much additional tail-driven
+information is extracted by moving below the Shannon limit.
+
+The two theorems jointly deliver a principled argument for why
+tail-emphasizing $\alpha < 1$ should matter precisely when returns
+deviate from Gaussianity (crisis) and should not matter when they do not
+(calm periods). They also define the Effective Rényi TE via
+phase-randomized surrogates; HR-ETE-GNN adopts this construction
+verbatim for bias correction.
+
+\section{Graph Neural Network For Financial Networking}
+
+\subsection{Kipf and Welling (2017) -- Graph Convolutional Network}
+
+Kipf and Welling (2017) \cite{kipf2017}, introduced the Graph
+Convolutional Network (GCN) which is a first-order spectral
+graph-convolution layer in which each node aggregates a linear
+combination of its neighbors' features at every layer, followed by a
+pointwise non-linearity. The propagation rule
+$H^{(l+1)} = \sigma\bigl(\widehat{D}^{-1/2}\,\widehat{A}\,\widehat{D}^{-1/2}\,H^{(l)} W^{(l)}\bigr)$,
+with $\widehat{A} = A + I_{n}$ and $\widehat{D}$ the corresponding
+degree matrix, reduces graph learning to sparse matrix multiplications
+tractable at scale. Although the original application is semi-supervised
+node classification on citation graphs, the formulation has become the
+default choice wherever practitioners need a simple, well-understood
+message-passing layer over a fixed adjacency.
+
+Lee and Cho (2025) \cite{lee2025} adopt a stack of three GCN layers for
+their financial application, and HR-ETE-GNN inherits this architectural
+choice unchanged in order to preserve the clean-ablation protocol. The
+GCN's requirement of a pre-specified adjacency matrix is precisely what
+makes the entropy-basis intervention explored in this paper meaningful:
+the learnable parameters of the network operate on whatever graph is
+supplied, so replacing Shannon-ETE edges with ER-TE edges isolates the
+contribution of the edge-construction metric.
+
+% =====================================================================
+\chapter{METHODOLOGY}\label{ch:method}
+% =====================================================================
+
+To compare the difference between the application of Rényi Transfer
+Entropy and Shannon Transfer Entropy to predict stock volatility, our
+methodology follows Lee and Cho's \cite{lee2025} hybrid model.
+
+\section*{Methodology as Replicable}
+\addcontentsline{toc}{section}{Methodology as Replicable}
+
+\section{Data}
+
+This paper will use daily closing prices of ten MSCI country-level
+iShares ETFs representing both developed and emerging markets: (1) EWA,
+iShares MSCI Australia, (2) EWC, iShares MSCI Canada, (3) EWG, iShares
+MSCI Germany, (4) EWJ, iShares MSCI Japan, (5) EWT, iShares MSCI Taiwan,
+(6) EWU, iShares MSCI United Kingdom, (7) EWW, iShares MSCI Mexico, (8)
+EWY, iShares MSCI South Korea, (9) EWZ, iShares MSCI Brazil, (10) EZA,
+iShares MSCI South Africa. Additionally, the iShares MSCI World ETF is
+used for the Hurst-exponent-based regime detection. The data gathered
+would be from February 7, 2003, to May 29, 2024.
+
+Given $p_{t}$ as the current closing price at time $t$ of an ETF and
+$p_{t-1}$ as the closing price of the day before, we compute the return
+$r_{t}$ at time $t$ as the following:
+\[
+  r_{t} = \ln\left(p_{t} / p_{t-1}\right)
+\]
+
+Realized volatility is computed from the past $n$ trading days of
+log-returns:
+\[
+  RV_{t} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(100\, r_{t-i}\right)^{2}}
+\]
+Where $t$ refers to the specific date, and $n$ denotes the number of
+past observations. For this study, we will compute realized volatility
+using the past 20 days of log-returns.
+
+The supervised samples are formed with a look-back window of 20 trading
+days and split chronologically into training (60\%), validation (20\%),
+and test (20\%) blocks. All graph estimation, hyperparameter selection,
+and Rényi-order selection use the training and validation blocks only;
+the ER-TE adjacency matrix is estimated on training-block returns alone,
+so that no test-period observation informs the graph the model uses to
+forecast it.
+
+\section{Crisis Sub-samples}
+
+Three crisis periods are defined for regime-stratified evaluation: (1)
+the Global Financial Crisis (GFC), spanning September 2008 to March
+2009; (2) COVID-19, spanning February 2020 to June 2020; (3) the
+Russia--Ukraine conflict, spanning February 2022 to May 2022.
+
+These windows are defined by reference to the documented episodes of
+extreme market stress themselves, and not by the behaviour of the Hurst
+Exponent.
+
+\section{ER-TE Estimation Procedure}\label{sec:erte}
+
+\textbf{Step 1 --- Rényi entropy estimation.} We utilize the LPS
+estimator of Leonenko, Pronzato, and Savani \cite{leonenko2008}, a
+k-nearest-neighbor (k-NN) estimator of Rényi entropy, for a sample
+$\{x_{1}, x_{2}, \ldots, x_{N}\}$ in $d$ dimensions for order
+$\alpha \neq 1$:
+\[
+  \widehat{H}_{\alpha}
+    = \frac{1}{1-\alpha}\log_{2}\left[
+        C_{k} \cdot (N-1)^{1-\alpha} \cdot B_{d}^{1-\alpha}
+        \cdot \frac{1}{N}\sum_{i=1}^{N}\rho_{i}^{d(1-\alpha)}
+      \right]
+\]
+Where $\rho_{i}$ is the distance from $x_{i}$ to its $k$-th nearest
+neighbor and $B_{d}$ is the volume of the $d$-dimensional unit ball.
+
+\textbf{Step 2 --- Conditional Rényi entropy.} The conditional Rényi
+entropies $H_{\alpha}(X_{t+1} \mid X_{n}^{(k)})$ and
+$H_{\alpha}(X_{t+1} \mid X_{n}^{(k)}, Y_{n}^{(l)})$ are estimated using
+the same k-NN approach in the appropriate joint spaces (dimensions
+$d = k + 1$ and $d = k + l + 1$, respectively).
+
+\textbf{Step 3 --- RTE computation.} For each ordered pair $(Y, X)$ of
+ETFs:
+\[
+  T_{\alpha, Y \rightarrow X}^{R}
+    = H_{\alpha}\bigl(X_{t+1} \mid X_{n}^{(k)}\bigr)
+    - H_{\alpha}\bigl(X_{t+1} \mid X_{n}^{(k)}, Y_{n}^{(l)}\bigr)
+\]
+with lag parameters $k = 1$, following Lee and Cho \cite{lee2025}.
+
+\textbf{Step 4 --- Effective correction.} For each pair, generate $m$
+shuffled surrogates of $Y$ and compute:
+\[
+  \ERTE_{\alpha, Y \rightarrow X}
+    = T_{\alpha, Y \rightarrow X}^{R}
+    - \frac{1}{m}\sum_{i=1}^{m} T_{\alpha, Y_{i} \rightarrow X}^{R}
+\]
+
+\textbf{Step 5 --- Significance testing.} Compute the Z-score against
+the shuffled distribution. Retain only ER-TE values with $Z > 1.96$ in
+the adjacency matrix; set all others to zero.
+
+\textbf{Step 6 --- Adjacency matrix.} The resulting $n \times n$ sparse,
+directed, weighted matrix $A_{\alpha}$ serves as the GCN adjacency for a
+given training window and Rényi order $\alpha$. Rows of $A_{\alpha}$ are
+normalised to sum to one before use.
+
+Row normalisation is a departure from the specification of Lee and Cho
+\cite{lee2025}. And it is made for experimental control rather than in
+spite of it. Under their node-update rule (Section~\ref{sec:gcn}) the
+neighborhood term enters in proportion to the raw magnitude of the
+adjacency entries, so the influence of the graph on the forecast is a
+function of the scale of the edge weights and not only of their pattern.
+Rényi and Shannon transfer entropies do not share a common scale: the
+order $\alpha$ enters the Rényi entropy through a factor
+$1/(1-\alpha)$, so ER-TE magnitudes vary systemically with $\alpha$ even
+where the underlying network is changed. On raw weights, a comparison
+between $\alpha = 1$ and $\alpha = \alpha^{*}$ arms would therefore
+confound a difference in edge topology, which is the object of this
+study. Row Normalisation removes that confound by placing every
+adjacency on a common scale, and it is applied identically to both arms
+and to every secondary graph model.
+
+\textbf{Step 7 --- Network Comparison.} For each matrix, each ETF's
+out-degree is computed as the number of retained outgoing edges and its
+weighted out-degree as the sum of their ER-TE values. The two networks
+are then compared on three quantities: (i) the identity and ordering of
+the top-$K$ transmitters, $K = 3$; (ii) the number of directed edges
+common to both matrices, reported as an overlap table alongside
+adjacency heatmaps; and (iii) Kendall's rank correlation $\tau$
+\cite{kendall1938} between the two out-degree rankings, with a 90\%
+confidence interval obtained by stationary bootstrap \cite{politis1994}
+with expected block length 20 trading days. All three are reported
+separately for crisis and non-crisis windows.
+
+The confidence interval on $\tau$ is reported to convey how much of the
+observed rank divergence is compatible with sampling variation. It is a
+single pre-specified quantity rather than a battery of edge-level tests,
+and it is presented as a descriptive aid; the language used to discuss
+it in Chapters~\ref{ch:results} and~\ref{ch:conclusion} is that of
+compatibility with noise, not of statistical significance.
+
+\section{Graph Convolutional Network}\label{sec:gcn}
+
+The GNN architecture follows Lee and Cho \cite{lee2025} and is grounded
+in the spectral GCN framework of Kipf and Welling \cite{kipf2017}, to
+enable a clean ablation.
+
+\textbf{Multi-scale temporal feature extraction.} Given an input time
+series of length $t$ for each of $n$ ETFs, multi-scale features are
+extracted via 1D convolutional filters with kernel sizes
+$k_{i} \in \{3, 5, 7\}$, each with 12 channels:
+\[
+  f = \bigoplus_{i=0}^{q} \ReLU\left(k_{i} \cdot v + b_{i}\right)
+\]
+Where $\bigoplus$ denotes concatenation across filter outputs. The result
+is a feature matrix $H \in \mathbb{R}^{n \times d}$.
+
+\textbf{Message passing.} The adjacency matrix $A$ is the ER-TE matrix.
+The GCN update rule for node $i$ at layer $l + 1$ is:
+\[
+  h_{i}^{l+1} = \ReLU\Bigl(h_{i}^{l} W_{1}^{l}
+      + \sum_{j \in N(i)} A_{ji}\, h_{j}^{l} W_{2}^{l}\Bigr),
+  \qquad h^{0} = f
+\]
+Where $W_{1}^{l}$ and $W_{2}^{l}$ are learnable weight matrices, $A_{ji}$
+is the ER-TE weight of the directed edge from node $j$ to node $i$, and
+$N(i)$ is the set of neighbors of node $i$. With three GCN layers, each
+node aggregates information from neighbors up to three hops away.
+
+\textbf{Output.} The final GCN layer produces a prediction vector of
+dimension $(1 \times n)$, representing the one-day-ahead
+realized-volatility forecast for each of the $\mathbf{n}$ ETFs.
+
+\section{Hyperparameter Configuration}
+
+The Rényi order $\alpha$ is introduced as an additional hyperparameter
+alongside those defined in Lee and Cho \cite{lee2025}. All
+hyperparameters are tuned via Bayesian Optimization.
+
+\begin{table}[htbp]
+  \centering
+  \singlespacing
+  \caption{Hyperparameters}\label{tab:hyperparams}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Hyperparameter} & \textbf{Search Space} & \textbf{Description} \\
+    \midrule
+    Learning Rate               & $[1 \times 10^{-2} - 1 \times 10^{-5}]$ & Adam optimizer step size \\
+    Batch Size                  & $[4, 8, 16]$                        & Mini-batch size \\
+    Hidden State Size (Layer 1) & $[10 - 100]$                        & GCN hidden dimension \\
+    Hidden State Size (Layer 2) & $[10 - 100]$                        & GCN hidden dimension \\
+    Input Size ($M$)            & $[20, 40, 60]$                      & Look-back window in days \\
+    Training Period ($N$)       & $[250, 500, 750]$                   & Training window length \\
+    Regime Sensitivity ($s$)    & $[6, 7, 8]$                         & Hurst threshold for regime change \\
+    Shuffle Simulations ($m$)   & $[100]$                             & Number of surrogate series for ETE \\
+    Rényi Order ($\alpha$)      & $\{0.3, 0.5, 0.7, 0.9, 1.0, 1.5, 2.0\}$ & Tail-sensitivity parameter \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+When $\alpha = 1.0$, HR-ETE-GNN reduces exactly to the original
+H-ETE-GNN \cite{lee2025}, ensuring backward compatibility.
+
+\section{Regime-Adaptive Retraining Protocol}
+
+Following Lee and Cho \cite{lee2025}:
+
+\begin{itemize}
+  \item Compute the daily Hurst exponent $H(t)$ on the MSCI World ETF
+        using a 250-day rolling R/S window.
+  \item For each day $t$, count the number of days in
+        $\{t - 9, \ldots, t\}$ where $H > 0.5$.
+  \item If this count exceeds the threshold $s$, classify as
+        ``persistent'' regime; otherwise, ``anti-persistent.''
+  \item When the regime label changes from the previous day, trigger:
+        \begin{itemize}
+          \item Recomputation of the ER-TE adjacency matrix on the most
+                recent $N$ days.
+          \item Fine-tuning of the GNN weights.
+        \end{itemize}
+  \item If the regime remains unchanged, the current model and adjacency
+        are used for prediction without modification.
+\end{itemize}
+
+\section{Benchmark Models}
+
+The primary comparison is HR-ETE-GNN vs H-ETE-GNN. Secondary comparisons
+against other models provide context.
+
+\begin{table}[htbp]
+  \centering
+  \singlespacing
+  \caption{Baseline Models and their Characteristics}\label{tab:baselines}
+  \small
+  \begin{tabular}{lllll}
+    \toprule
+    \textbf{Model} & \textbf{Edge Metric} & \textbf{GNN} & \textbf{Regime Adapt} & $\boldsymbol{\alpha}$ \\
+    \midrule
+    HAR-RV                       & N/A (univariate)                     & No                  & No    & N/A \\
+    LSTM \cite{hochreiter1997}   & N/A (univariate)                     & No                  & Yes   & N/A \\
+    GRU \cite{cho2014}           & N/A (univariate)                     & No                  & Yes   & N/A \\
+    GNN-Pearson                  & Pearson correlation                  & GCN \cite{kipf2017} & No    & N/A \\
+    GNN-Granger                  & Granger causality \cite{granger1969} & GCN \cite{kipf2017} & No    & N/A \\
+    GNN-TE                       & Shannon TE \cite{schreiber2000}      & GCN \cite{kipf2017} & No    & N/A \\
+    GNN-ETE                      & Shannon ETE \cite{marschinski2002}   & GCN \cite{kipf2017} & No    & N/A \\
+    H-ETE-GNN \cite{lee2025}     & Shannon ETE                          & GCN                 & Hurst & $\alpha = 1$ \\
+    HR-ETE-GNN (this work)       & Rényi ETE                            & GCN                 & Hurst & Tuned \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Evaluation Metrics}
+
+The pre-registered primary loss function is QLIKE, evaluated on the
+variance scale. Given the realized volatility variance $\sigma^{2}$, and
+the model's forecast variance $\widehat{\sigma}^{2}$ of ETF $i$ on day
+$t$, we compute QLIKE as:
+\[
+  r_{t,i} = \frac{\sigma_{t,i}^{2}}{\widehat{\sigma}_{t,i}^{2}}
+\]
+\[
+  \QLIKE_{t,i} = r_{t,i} - \log r_{t,i} - 1
+\]
+
+All tests in Section~\ref{sec:hypotheses} operate on a single daily
+series. For each test day $t$, and ETF $i$, the loss differential is:
+\[
+  d_{t} = \frac{1}{n}\sum_{i}\Bigl[\QLIKE_{t,i}(\text{H-ETE-GNN})
+          - \QLIKE_{t,i}(\text{HR-ETE-GNN})\Bigr]
+\]
+that is, the cross-sectional average across the $n = 10$ ETFs of the
+per-asset loss difference, taken first, so that each test is applied to
+$T$ daily observations rather than to a pooled panel of $n \times T$. A
+positive $d_{t}$ means HR-ETE-GNN incurred the smaller loss on day $t$,
+and every hypothesis below is therefore one-sided in the direction
+$d > 0$. Pooling the panel would be inappropriate: the ten ETFs' losses
+are strongly correlated within a date, a time-series HAC estimator does
+not correct for that cross-sectional dependence, and a pooled test would
+consequently understate the standard error and overstate significance.
+
+All standard errors are heteroskedasticity- and
+autocorrelation-consistent, computed with the Newey--West estimator
+\cite{newey1987} under a Bartlett kernel with bandwidth
+$\left[4(T/100)^{2/9}\right]$, where $T$ is the number of test days; the
+bandwidth actually used is reported. HAC correction is necessary rather
+than precautionary here, since volatility clusters and loss
+differentials are in consequence strongly serially correlated, so that
+an variance estimate would manufacture significance.
+
+\section{Hypotheses and Test Procedure}\label{sec:hypotheses}
+
+\subsection{Hypothesis 1a --- Average predictive accuracy}\label{sec:h1a}
+
+\textbf{$\boldsymbol{H_0}$}: Over the test period, HR-ETE-GNN and
+H-ETE-GNN have equal expected loss, and any observed difference is
+sampling variation.
+
+\textbf{$\boldsymbol{H_1}$}: HR-ETE-GNN has strictly lower expected loss
+than H-ETE-GNN.
+
+To test for this we use The Giacomini--White test of conditional
+predictive ability \cite{giacomini2006} in its unconditional form,
+one-sided, with the HAC standard error. The statistic is
+$t = \bar{d} / \mathrm{SE}(\bar{d})$ and the one-sided p-value is
+$1 - \Phi(t)$.
+
+$H_0$ is rejected at the 5\% level for $t > 1.645$. In addition to the
+p-value, the mean differential $\bar{d}$, its expression as a percentage
+of the baseline's mean loss, and a one-sided 95\% lower confidence bound
+are reported. A statistically significant improvement smaller than 5\%
+of baseline loss is reported as statistically detectable but
+economically immaterial. A negative $\bar{d}$ with a large statistic is
+reported as evidence that the Shannon baseline is superior; the test is
+not converted to a two-sided form after the fact.
+
+\subsection{Research Question 2 --- Descriptive network comparison}
+
+Research Question 2 concerns the structure of the estimated networks
+rather than the accuracy of the forecasts they support, and it is
+addressed descriptively. No hypothesis test is attached to it, and no
+claim of statistical significance is made about any structural
+difference reported under it. Its findings are secondary to those of
+Section~\ref{sec:h1a}.
+
+During crisis windows, the set of dominant volatility-information
+transmitters, the top-ranked source ETFs by out-degree in the retained
+adjacency matrix, is expected to differ between Shannon ($\alpha = 1$)
+and tail-sensitive ($\alpha^{*}$) measurement, and to coincide outside
+them. The basis for this expectation is the theory of
+Section~\ref{sec:theorems} and is directional: by Theorem 3.1 the two
+measures agree exactly when returns are Gaussian, which is the
+calm-period case, and by Theorem 3.2 they diverge as returns become
+heavy-tailed.
+
+The three quantities of Section~\ref{sec:erte}, Step 7, top-$K$
+transmitter identity, edge overlap counts with adjacency heatmaps, and
+Kendall's $\tau$ between the two out-degree rankings with a
+stationary-bootstrap confidence interval, computed separately for crisis
+and non-crisis windows.
+
+A formal test of the null that the two transmitter rankings are
+identical would require a resampling procedure over the edge set
+together with correction for the ninety ordered pairs screened
+simultaneously. That machinery lies outside the scope defined in
+Section~\ref{sec:scope}. The consequence is stated plainly rather than
+left to the reader to infer: the structural differences reported in
+Chapter~\ref{ch:results} may in part reflect estimation noise, and no
+significance is claimed for them. They are offered as a characterisation
+of what the two measures see, and as context for the forecasting
+results, which are where the inferential weight of this study rests.
+
+Relation to the forecasting hypotheses. The structural comparison is a
+claim about measurement, not about prediction, and the two are
+independent by construction. The two entropy bases may describe visibly
+different networks without that difference translating into forecast
+accuracy under the architecture of Section~\ref{sec:gcn}, and
+conversely. The two sets of results are therefore reported without
+conditioning either on the other, and in particular a divergence in
+network structure is not offered as evidence for, nor its absence as
+evidence against, Hypotheses 1a.
+
+% =====================================================================
+\chapter{PRELIMINARY RESULTS}\label{ch:results}
+% =====================================================================
+
+\section{Preliminary Results}
+
+The results in this section come from a reduced-scope execution of the
+pipeline described in Chapter~\ref{ch:method} and are reported to
+demonstrate the evaluation format rather than to establish a finding.
+They should not be read as estimates of the confirmatory result.
+
+\begin{table}[htbp]
+  \centering
+  \singlespacing
+  \caption{Mean QLIKE by Model}\label{tab:qlike}
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Model} & \textbf{QLIKE} & \textbf{vs.\ baseline} \\
+    \midrule
+    H-ETE-GNN  & 0.01360 & -- \\
+    HR-ETE-GNN & 0.01430 & $-5.15\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \singlespacing
+  \caption{Predictive Accuracy Comparison}\label{tab:gw}
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Quantity} & \textbf{Value} \\
+    \midrule
+    Test Days ($T$)                        & 314 \\
+    Mean loss differential ($\bar{d}$)     & $-0.0007$ \\
+    Relative Change vs Baseline            & $-5.15\%$ \\
+    HAC Standard Error                     & 0.000363 \\
+    GW t-statistic                         & $-1.928$ \\
+    One-sided p-value                      & 0.973 \\
+    Decision at 5\%                        & Failed to reject \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Over $T = 314$ test days, mean QLIKE was 0.01360 for H-ETE-GNN and
+0.01430 for HR-ETE-GNN at $\alpha = 0.5$, giving a mean loss
+differential of $\bar{d} = -0.000700$, or $-5.15\%$ of baseline loss.
+The HAC standard error was 0.000363, yielding a Giacomini--White
+statistic of $t = -1.928$ and a one-sided p-value of 0.973 against the
+pre-registered alternative. The null of equal predictive accuracy is not
+rejected at the 5\% level. Under the decision rule of
+Section~\ref{sec:h1a} a negative differential of this magnitude is
+reported as favouring the Shannon baseline rather than as an absence of
+difference; consistent with that rule, the test is not restated in the
+opposite direction.
+
+\begin{table}[htbp]
+  \centering
+  \singlespacing
+  \caption{Out-Degree by Country, per $\alpha$}\label{tab:outdegree}
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Country} & $\boldsymbol{\alpha = 0.5}$ \textbf{(Rényi)} & $\boldsymbol{\alpha = 1}$ \textbf{(Shannon)} \\
+    \midrule
+    Germany      & 5 & 6 \\
+    Australia    & 2 & 0 \\
+    Canada       & 3 & 1 \\
+    UK           & 3 & 3 \\
+    South Korea  & 2 & 1 \\
+    Brazil       & 0 & 0 \\
+    Japan        & 1 & 1 \\
+    Taiwan       & 2 & 4 \\
+    Mexico       & 1 & 1 \\
+    South Africa & 1 & 3 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Germany is the leading volatility-information transmitter under both
+measures, with out-degree 6 under Shannon and 5 under Rényi. The top 3
+transmitters for Rényi are Germany, Canada, and the UK. Meanwhile, for
+Shannon they are Germany, Taiwan, and the UK.
+
+% =====================================================================
+\chapter{CONCLUSION}\label{ch:conclusion}
+% =====================================================================
+
+% TODO: Conclusion (empty in the source manuscript).
+
+% =====================================================================
+%  Bibliography (numbered in the same order as the original manuscript)
+% =====================================================================
+\begingroup
+\singlespacing
+\begin{thebibliography}{99}
+\addcontentsline{toc}{chapter}{BIBLIOGRAPHY}
+
+\bibitem{andersen2003}
+Andersen, T.G., Bollerslev, T., Diebold, F.X., and Labys, P. 2003.
+Modeling and forecasting realized volatility. \emph{Econometrica} 71, 2
+(2003), 579--625.
+
+\bibitem{engle2004}
+Engle, R.F. 2004. Risk and volatility: Econometric models and financial
+practice. \emph{American Economic Review} 94, 3 (2004), 405--420.
+
+\bibitem{bollerslev1986}
+Bollerslev, T. 1986. Generalized autoregressive conditional
+heteroskedasticity. \emph{Journal of Econometrics} 31, 3 (1986),
+307--327.
+
+\bibitem{hochreiter1997}
+Hochreiter, S., and Schmidhuber, J. 1997. Long short-term memory.
+\emph{Neural Computation} 9, 8 (1997), 1735--1780.
+
+\bibitem{chen2023}
+Chen, J., and Robert, C.Y. 2023. Multivariate realized volatility
+forecasting with graph neural network. \emph{Proceedings of the Third
+ACM International Conference on AI in Finance} (2023), 422--430.
+
+\bibitem{granger1969}
+Granger, C.W.J. 1969. Investigating causal relations by econometric
+models and cross-spectral methods. \emph{Econometrica} 37, 3 (1969),
+424--438.
+
+\bibitem{schreiber2000}
+Schreiber, T. 2000. Measuring information transfer. \emph{Physical
+Review Letters} 85, 2 (2000), 461--464.
+
+\bibitem{behrendt2019}
+Behrendt, S., Dimpfl, T., Peter, F.J., and Zimmermann, D.J. 2019.
+RTransferEntropy --- Quantifying information flow between different time
+series using effective transfer entropy. \emph{SoftwareX} 10 (2019),
+100265.
+
+\bibitem{lee2025}
+Lee, S., and Cho, P. 2025. Graph-based stock volatility forecasting with
+effective transfer entropy and Hurst-based regime adaptation.
+\emph{Fractal and Fractional} 9, 6 (2025), 339.
+
+\bibitem{marschinski2002}
+Marschinski, R., and Kantz, H. 2002. Analysing the information flow
+between financial time series. \emph{European Physical Journal B} 30, 2
+(2002), 275--281.
+
+\bibitem{jizba2022}
+Jizba, P., Lavička, H., and Tabachová, Z. 2022. Causal inference in time
+series in terms of Rényi transfer entropy. \emph{arXiv preprint}
+arXiv:2203.11407 (2022).
+
+\bibitem{kupiec1995}
+Kupiec, P.H. 1995. Techniques for verifying the accuracy of risk
+measurement models. \emph{Journal of Derivatives} 3, 2 (1995), 73--84.
+
+\bibitem{christoffersen1998}
+Christoffersen, P.F. 1998. Evaluating interval forecasts.
+\emph{International Economic Review} 39, 4 (1998), 841--862.
+
+\bibitem{renyi1961}
+Rényi, A. 1961. On measures of entropy and information.
+\emph{Proceedings of the Fourth Berkeley Symposium on Mathematical
+Statistics and Probability} 1 (1961), 547--561.
+
+\bibitem{hurst1951}
+Hurst, H.E. 1951. Long-term storage capacity of reservoirs.
+\emph{Transactions of the American Society of Civil Engineers} 116
+(1951), 770--799.
+
+\bibitem{kipf2017}
+Kipf, T.N., and Welling, M. 2017. Semi-supervised classification with
+graph convolutional networks. \emph{Proceedings of ICLR} (2017).
+
+\bibitem{jizba2012}
+Jizba, P., Kleinert, H., and Shefaat, M. 2012. Rényi's information
+transfer between financial time series. \emph{Physica A} 391, 10 (2012),
+2971--2989.
+
+\bibitem{leonenko2008}
+Leonenko, N., Pronzato, L., and Savani, V. 2008. A class of Rényi
+information estimators for multidimensional densities. \emph{Annals of
+Statistics} 36, 5 (2008), 2153--2182.
+
+\bibitem{cho2014}
+Cho, K., van Merriënboer, B., Gulcehre, C., Bahdanau, D., Bougares, F.,
+Schwenk, H., and Bengio, Y. 2014. Learning phrase representations using
+RNN encoder-decoder for statistical machine translation.
+\emph{Proceedings of EMNLP} (2014), 1724--1734.
+
+\bibitem{defferrard2016}
+Defferrard, M., Bresson, X., and Vandergheynst, P. 2016. Convolutional
+neural networks on graphs with fast localized spectral filtering.
+\emph{Advances in Neural Information Processing Systems} 29 (2016),
+3844--3852.
+
+\bibitem{politis1994}
+Politis, D.N., and Romano, J.P. 1994. The stationary bootstrap.
+\emph{Journal of the American Statistical Association} 89, 428 (1994),
+1303--1313.
+
+\bibitem{kendall1938}
+Kendall, M.G. 1938. A new measure of rank correlation.
+\emph{Biometrika} 30, 1--2 (1938), 81--93.
+
+\bibitem{corsi2009}
+Corsi, F. 2009. A simple approximate long-memory model of realized
+volatility. \emph{Journal of Financial Econometrics} 7, 2 (2009),
+174--196.
+
+\bibitem{patton2011}
+Patton, A.J. 2011. Volatility forecast comparison using imperfect
+volatility proxies. \emph{Journal of Econometrics} 160, 1 (2011),
+246--256.
+
+\bibitem{newey1987}
+Newey, W.K., and West, K.D. 1987. A simple, positive semi-definite,
+heteroskedasticity and autocorrelation consistent covariance matrix.
+\emph{Econometrica} 55, 3 (1987), 703--708.
+
+\bibitem{giacomini2006}
+Giacomini, R., and White, H. 2006. Tests of conditional predictive
+ability. \emph{Econometrica} 74, 6 (2006), 1545--1578.
+
+\bibitem{diebold1995}
+Diebold, F.X., and Mariano, R.S. 1995. Comparing predictive accuracy.
+\emph{Journal of Business \& Economic Statistics} 13, 3 (1995),
+253--263.
+
+\bibitem{harvey1997}
+Harvey, D., Leybourne, S., and Newbold, P. 1997. Testing the equality of
+prediction mean squared errors. \emph{International Journal of
+Forecasting} 13, 2 (1997), 281--291.
+
+\bibitem{clark2007}
+Clark, T.E., and West, K.D. 2007. Approximately normal tests for equal
+predictive accuracy in nested models. \emph{Journal of Econometrics}
+138, 1 (2007), 291--311.
+
+\end{thebibliography}
+\endgroup
+
+% =====================================================================
+%  Appendix
+% =====================================================================
+\appendix
+\frontchapter{APPENDIX}
+
+% TODO: Appendix (empty in the source manuscript).
+
+\end{document}
