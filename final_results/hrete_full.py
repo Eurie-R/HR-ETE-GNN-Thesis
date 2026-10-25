@@ -37,6 +37,11 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
+# Deterministic GPU kernels.  cuBLAS reads this when it first initialises, so it
+# must be set before torch touches the GPU; importing this module sets it in the
+# notebook kernel and in every spawned worker.  See set_deterministic().
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -61,6 +66,22 @@ VAL_END = "2009-12-31"
 
 SEEDS: tuple = tuple(range(10))          # paper: 10 repetitions; same seeds both arms
 VAL_SEEDS: tuple = (0, 1, 2)             # seeds for the alpha-selection runs
+
+
+# On cuda, cuDNN's default convolution kernels add in a run-dependent order, so
+# the same seed gave val MSE 0.912 / 1.369 / 1.410 on three reruns (alpha = 1,
+# seed 0).  With these flags reruns are bit-identical, at no measured cost.
+# Runs made before this was switched on are kept in archive_nondeterministic_2026-10-12/ next to this file.
+DETERMINISTIC = True
+
+
+def set_deterministic(on: bool = DETERMINISTIC) -> None:
+    """Make every torch op use a fixed-order kernel, or raise if it has none."""
+    import torch
+    torch.backends.cudnn.deterministic = on
+    if on:
+        torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(on)
 
 
 def make_config(**overrides) -> hb.Config:
@@ -251,6 +272,7 @@ def run_one(spec: RunSpec, cfg_overrides: Optional[dict] = None,
     """One walk-forward run.  Skips work if its checkpoint already exists."""
     if spec.path.exists():
         return {"spec": spec, "skipped": True, "seconds": 0.0}
+    set_deterministic()
     cfg = make_config(**(cfg_overrides or {})).apply_runtime()
     with open(data_path, "rb") as f:
         data = pickle.load(f)
@@ -264,7 +286,8 @@ def run_one(spec: RunSpec, cfg_overrides: Optional[dict] = None,
     np.savez_compressed(tmp, dates=r.dates.values.astype("datetime64[ns]"),
                         y_true=r.y_true, y_pred=r.y_pred,
                         n_refits=r.n_refits, seconds=r.seconds,
-                        alpha=spec.alpha, seed=spec.seed)
+                        alpha=spec.alpha, seed=spec.seed,
+                        deterministic=DETERMINISTIC, device=cfg.device)
     os.replace(tmp, spec.path)                     # atomic: no half-written runs
     return {"spec": spec, "skipped": False, "seconds": r.seconds,
             "n_refits": r.n_refits}
@@ -309,7 +332,9 @@ def load_run(spec: RunSpec) -> dict:
     return dict(dates=pd.DatetimeIndex(z["dates"]), y_true=z["y_true"],
                 y_pred=z["y_pred"], n_refits=int(z["n_refits"]),
                 seconds=float(z["seconds"]), alpha=float(z["alpha"]),
-                seed=int(z["seed"]))
+                seed=int(z["seed"]),
+                deterministic=bool(z["deterministic"]) if "deterministic" in z.files else False,
+                device=str(z["device"]) if "device" in z.files else "unknown")
 
 
 # =============================================================================
@@ -320,6 +345,7 @@ def benchmark(cfg: hb.Config, data: dict, alphas: Sequence[float] = (1.0, 0.7),
               repeats: int = 1) -> dict:
     """Time one graph build per alpha and one full 100-epoch fit on cfg.device."""
     import torch
+    set_deterministic()
     cfg.apply_runtime()
     wf = hb.WalkForward(cfg, data["ret"], data["rv"], data["changes"])
     N = cfg.train_period

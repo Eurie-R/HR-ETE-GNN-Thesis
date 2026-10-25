@@ -1,0 +1,15 @@
+quantity,value
+"QLIKE, H-ETE-GNN",0.03465258479849209
+"QLIKE, HR-ETE-GNN(a=0.7)",0.06927889201514945
+"QLIKE improvement, %",-99.92416847981889
+GW unconditional: Wald stat,392.77032808847144
+GW unconditional: p (two-sided),2.0643288571573303e-87
+GW unconditional: p (one-sided),1.0
+DM (HLN) on QLIKE: stat,-48.76808869792784
+DM (HLN) on QLIKE: p one-sided,1.0
+"MSE improvement, %",-19.60447439331977
+DM on MSE: p one-sided,0.9974593981262999
+GW with lagged regime: Wald stat,413.0309312935876
+GW with lagged regime: p,2.048673934591097e-90
+GW regime coefficient,0.002857215174310298
+GW regime coefficient p,0.37502820586120367
